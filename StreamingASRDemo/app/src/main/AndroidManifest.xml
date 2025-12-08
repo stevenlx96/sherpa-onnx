@@ -11,6 +11,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.StreamingASRDemo"
         tools:replace="android:theme">
+
+        <!-- 移除 AAR 中的 MainActivity 声明 -->
+        <activity
+            android:name="com.example.streamingasr.MainActivity"
+            tools:node="remove" />
+
+        <!-- Demo 应用的 MainActivity -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
