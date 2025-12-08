@@ -421,7 +421,9 @@ class ModelManager(private val context: Context) {
             模型文件需要放置在:
             ${modelDir.absolutePath}
 
-            支持的模型类型:
+            ========================================
+            必需文件:
+            ========================================
 
             1. Zipformer Transducer (推荐 - 中英文双语):
                需要的文件:
@@ -447,19 +449,40 @@ class ModelManager(private val context: Context) {
                - model.int8.onnx
                - tokens.txt
 
-            可选：同音字替换功能 (HomophoneReplacer):
-               需要的文件:
-               - lexicon.txt (词典文件)
-               - replace.fst (替换规则FST)
+            ========================================
+            推荐：Silero VAD (优化断句)
+            ========================================
 
-               下载地址:
-               https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
+            文件名: silero_vad.onnx
 
-               功能说明:
-               自动纠正同音字错误，如 "在坐" → "在座", "因该" → "应该"
-               这些文件是可选的，如果不存在则不启用同音字替换功能
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
 
+            功能说明:
+            - 智能语音活动检测，比内置endpoint更准确
+            - 0.3秒静音即可断句（比内置快5倍）
+            - 抗噪音能力强，避免误断句
+            - 如果不存在，将使用内置的endpoint断句
+
+            ========================================
+            可选：同音字替换功能 (HomophoneReplacer)
+            ========================================
+
+            需要的文件:
+            - lexicon.txt (词典文件)
+            - replace.fst (替换规则FST)
+
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
+
+            功能说明:
+            自动纠正同音字错误，如 "在坐" → "在座", "因该" → "应该"
+            这些文件是可选的，如果不存在则不启用同音字替换功能
+
+            ========================================
             使用adb推送模型:
+            ========================================
+
             adb push <模型文件> ${modelDir.absolutePath}/
 
             或者使用应用的文件管理功能将模型复制到此目录
@@ -471,6 +494,63 @@ class ModelManager(private val context: Context) {
      */
     fun listModelFiles(): List<String> {
         return modelDir.listFiles()?.map { it.name } ?: emptyList()
+    }
+
+    /**
+     * 创建 Silero VAD
+     * @param threshold 语音检测阈值 (0-1, 默认 0.5)
+     * @param minSilenceDuration 最短静音时长，用于断句 (秒, 默认 0.3)
+     * @param minSpeechDuration 最短语音时长，过滤杂音 (秒, 默认 0.25)
+     * @param maxSpeechDuration 最大语音时长，强制断句 (秒, 默认 10.0)
+     * @return Vad 或 null (如果模型不存在)
+     */
+    fun createVad(
+        threshold: Float = 0.5F,
+        minSilenceDuration: Float = 0.3F,
+        minSpeechDuration: Float = 0.25F,
+        maxSpeechDuration: Float = 10.0F
+    ): Vad? {
+        val vadModelFile = File(modelDir, "silero_vad.onnx")
+
+        if (!vadModelFile.exists()) {
+            Log.e(TAG, "VAD model not found: ${vadModelFile.absolutePath}")
+            return null
+        }
+
+        Log.i(TAG, "Loading VAD model from: ${vadModelFile.absolutePath}")
+        Log.i(TAG, "VAD config: threshold=$threshold, minSilence=$minSilenceDuration, maxSpeech=$maxSpeechDuration")
+
+        val config = VadModelConfig(
+            sileroVadModelConfig = SileroVadModelConfig(
+                model = vadModelFile.absolutePath,
+                threshold = threshold,
+                minSilenceDuration = minSilenceDuration,
+                minSpeechDuration = minSpeechDuration,
+                maxSpeechDuration = maxSpeechDuration,
+                windowSize = 512
+            ),
+            sampleRate = 16000,
+            numThreads = 1,
+            provider = "cpu",
+            debug = false
+        )
+
+        return try {
+            val vad = Vad(assetManager = null, config = config)
+            Log.i(TAG, "VAD created successfully")
+            vad
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create VAD", e)
+            null
+        }
+    }
+
+    /**
+     * 检查 VAD 模型是否存在
+     */
+    fun checkVadExists(): Boolean {
+        val vadModelFile = File(modelDir, "silero_vad.onnx")
+        return vadModelFile.exists()
     }
 
     /**

@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var recognizer: OnlineRecognizer? = null
     private var stream: OnlineStream? = null
     private var audioRecorder: AudioRecorder? = null
+    private var vad: com.k2fsa.sherpa.onnx.Vad? = null  // VAD 用于智能断句
     private lateinit var modelManager: ModelManager
 
     // 状态
@@ -125,14 +126,31 @@ class MainActivity : AppCompatActivity() {
                     updateStatus("正在加载模型...")
                 }
 
+                // 加载 ASR 模型
                 recognizer = modelManager.createOnlineRecognizer(
                     modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
                 )
 
+                // 加载 VAD 模型（可选）
+                vad = modelManager.createVad(
+                    threshold = 0.5F,
+                    minSilenceDuration = 0.3F,     // 0.3秒静音断句
+                    minSpeechDuration = 0.25F,
+                    maxSpeechDuration = 10.0F      // 最长10秒一句
+                )
+
                 withContext(Dispatchers.Main) {
                     if (recognizer != null) {
-                        updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}")
+                        val vadStatus = if (vad != null) {
+                            "✓ VAD已启用 (智能断句)"
+                        } else {
+                            "✗ VAD未加载 (使用内置endpoint)"
+                        }
+                        updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus")
                         Log.i(TAG, "Recognizer initialized successfully")
+                        if (vad != null) {
+                            Log.i(TAG, "VAD initialized successfully")
+                        }
                     } else {
                         val instructions = modelManager.getModelDownloadInstructions()
                         updateStatus("模型加载失败\n\n$instructions")
@@ -226,6 +244,9 @@ class MainActivity : AppCompatActivity() {
                     val samples = audioRecorder?.readAudioData()
 
                     if (samples != null && samples.isNotEmpty()) {
+                        // 送入 VAD 检测（如果可用）
+                        vad?.acceptWaveform(samples)
+
                         // 送入识别流
                         stream?.acceptWaveform(samples, SAMPLE_RATE)
 
@@ -246,21 +267,37 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
 
-                        // 检查是否包含句子结束标点符号（语义断句）
+                        // 🎯 断句逻辑（三种方式，优先级递减）
                         val hasSentenceEnd = currentText.contains(Regex("[。！？.!?]"))
+                        val vadDetected = vad?.isSpeechDetected() == false  // VAD 检测到静音
+                        val isEndpoint = recognizer?.isEndpoint(stream!!) == true  // 内置 endpoint
 
-                        // 同时检查静音endpoint作为辅助判断
-                        val isEndpoint = recognizer?.isEndpoint(stream!!) == true
+                        // 组合断句策略
+                        val shouldBreak = when {
+                            hasSentenceEnd -> {
+                                Log.d(TAG, "断句触发: 标点符号")
+                                true
+                            }
+                            vadDetected && currentText.isNotEmpty() -> {
+                                Log.d(TAG, "断句触发: VAD 静音检测")
+                                true
+                            }
+                            isEndpoint -> {
+                                Log.d(TAG, "断句触发: 内置 endpoint")
+                                true
+                            }
+                            else -> false
+                        }
 
-                        // 如果检测到句子结束（标点符号优先，静音作为备选）
-                        if ((hasSentenceEnd || isEndpoint) && currentText.isNotEmpty()) {
+                        // 如果检测到句子结束
+                        if (shouldBreak && currentText.isNotEmpty()) {
                             // 句子结束，将当前文本添加到已完成的文本中
                             if (completedText.isNotEmpty()) {
                                 completedText.append("\n")
                             }
                             completedText.append(currentText)
 
-                            Log.i(TAG, "Sentence completed: $currentText (punctuation: $hasSentenceEnd, silence: $isEndpoint)")
+                            Log.i(TAG, "✓ 句子完成: $currentText")
 
                             // 更新UI：显示所有已完成的文本
                             withContext(Dispatchers.Main) {
@@ -270,6 +307,7 @@ class MainActivity : AppCompatActivity() {
 
                             // 重置流，继续识别下一句
                             recognizer?.reset(stream!!)
+                            vad?.reset()  // 重置 VAD
                             lastText = ""
                         } else if (currentText != lastText) {
                             // 实时更新：显示已完成的文本 + 当前正在识别的文本
@@ -358,5 +396,7 @@ class MainActivity : AppCompatActivity() {
         }
         audioRecorder = null
         recognizer = null
+        vad?.release()
+        vad = null
     }
 }
