@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
 import com.k2fsa.sherpa.onnx.OnlineStream
+import com.k2fsa.sherpa.onnx.Vad
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -48,7 +49,7 @@ class MainActivity : AppCompatActivity() {
     private var recognizer: OnlineRecognizer? = null
     private var stream: OnlineStream? = null
     private var audioRecorder: AudioRecorder? = null
-    private var vad: com.k2fsa.sherpa.onnx.Vad? = null  // VAD 用于智能断句
+    private var vad: Vad? = null  // VAD 用于智能断句
     private lateinit var modelManager: ModelManager
 
     // 状态
