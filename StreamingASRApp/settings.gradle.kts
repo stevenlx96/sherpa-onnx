@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "StreamingASRApp"
 include(":app")
 include(":library")
+include(":demo")
