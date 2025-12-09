@@ -142,16 +142,10 @@ class MainActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     if (recognizer != null) {
-                        val vadStatus = if (vad != null) {
-                            "✓ VAD已启用 (智能断句)"
-                        } else {
-                            "✗ VAD未加载 (使用内置endpoint)"
-                        }
+                        val vadStatus = if (vad != null) "✓ VAD已启用 (智能断句)" else "✗ VAD未加载 (使用内置endpoint)"
                         updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus")
                         Log.i(TAG, "Recognizer initialized successfully")
-                        if (vad != null) {
-                            Log.i(TAG, "VAD initialized successfully")
-                        }
+                        vad?.let { Log.i(TAG, "VAD initialized successfully") }
                     } else {
                         val instructions = modelManager.getModelDownloadInstructions()
                         updateStatus("模型加载失败\n\n$instructions")
