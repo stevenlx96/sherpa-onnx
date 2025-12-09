@@ -147,38 +147,53 @@ class MainActivity : AppCompatActivity() {
                     updateStatus("正在加载模型...")
                 }
 
-                // 加载 ASR 模型
-                recognizer = modelManager.createOnlineRecognizer(
-                    modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
-                )
+                // 检查是否有 keywords.txt 文件
+                val hasKeywords = modelManager.checkKwsExists()
 
-                // 加载 VAD 模型（可选）
+                // 加载 VAD 模型（可选，两种模式都需要）
                 vad = modelManager.createVad(
                     threshold = 0.5F,
-                    minSilenceDuration = 0.3F,     // 0.3秒静音断句
+                    minSilenceDuration = 0.3F,
                     minSpeechDuration = 0.25F,
-                    maxSpeechDuration = 10.0F      // 最长10秒一句
+                    maxSpeechDuration = 10.0F
                 )
 
-                // 加载 KWS 模型（可选）
-                keywordSpotter = modelManager.createKeywordSpotter(
-                    keywordsFile = "keywords.txt",
-                    threshold = 0.25F,
-                    score = 1.5F
-                )
+                if (hasKeywords) {
+                    // KWS 模式：只加载 KeywordSpotter（ASR 会在唤醒后动态创建）
+                    keywordSpotter = modelManager.createKeywordSpotter(
+                        keywordsFile = "keywords.txt",
+                        threshold = 0.25F,
+                        score = 1.5F
+                    )
 
-                withContext(Dispatchers.Main) {
-                    if (recognizer != null) {
-                        val vadStatus = if (vad != null) "✓ VAD已启用 (智能断句)" else "✗ VAD未加载 (使用内置endpoint)"
-                        val kwsStatus = if (keywordSpotter != null) "✓ KWS已启用 (唤醒词检测)" else "✗ KWS未加载 (直接识别模式)"
-                        updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus\n$kwsStatus")
-                        Log.i(TAG, "Recognizer initialized successfully")
-                        vad?.let { Log.i(TAG, "VAD initialized successfully") }
-                        keywordSpotter?.let { Log.i(TAG, "KeywordSpotter initialized successfully") }
-                    } else {
-                        val instructions = modelManager.getModelDownloadInstructions()
-                        updateStatus("模型加载失败\n\n$instructions")
-                        Log.e(TAG, "Failed to initialize recognizer - model files not found")
+                    withContext(Dispatchers.Main) {
+                        if (keywordSpotter != null) {
+                            val vadStatus = if (vad != null) "✓ VAD已启用" else "✗ VAD未加载"
+                            updateStatus("✓ KWS唤醒模式已启用\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus\n\n点击\"开始监听\"进入待机模式")
+                            btnStartStop.text = "开始监听"
+                            Log.i(TAG, "KeywordSpotter initialized successfully (KWS mode)")
+                        } else {
+                            updateStatus("KWS模型加载失败\n请检查 keywords.txt 文件")
+                            Log.e(TAG, "Failed to initialize KeywordSpotter")
+                        }
+                    }
+                } else {
+                    // 直接识别模式：加载 ASR
+                    recognizer = modelManager.createOnlineRecognizer(
+                        modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+                    )
+
+                    withContext(Dispatchers.Main) {
+                        if (recognizer != null) {
+                            val vadStatus = if (vad != null) "✓ VAD已启用 (智能断句)" else "✗ VAD未加载 (使用内置endpoint)"
+                            updateStatus("✓ 直接识别模式\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus\n\n点击\"开始识别\"直接开始")
+                            btnStartStop.text = "开始识别"
+                            Log.i(TAG, "Recognizer initialized successfully (Direct ASR mode)")
+                        } else {
+                            val instructions = modelManager.getModelDownloadInstructions()
+                            updateStatus("模型加载失败\n\n$instructions")
+                            Log.e(TAG, "Failed to initialize recognizer - model files not found")
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -340,27 +355,58 @@ class MainActivity : AppCompatActivity() {
      * 启动ASR识别（ACTIVE 模式）
      */
     private fun startAsrRecognition() {
-        try {
-            // 创建识别流
-            stream = recognizer?.createStream()
-            lastSpeechTime = System.currentTimeMillis()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // 动态创建 OnlineRecognizer（避免与 KWS 资源冲突）
+                if (recognizer == null) {
+                    Log.i(TAG, "Creating OnlineRecognizer on wake...")
+                    recognizer = modelManager.createOnlineRecognizer(
+                        modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+                    )
+                }
 
-            updateStatus("🎙️ 正在识别...")
-            tvResult.text = ""
+                if (recognizer == null) {
+                    withContext(Dispatchers.Main) {
+                        updateStatus("ASR模型加载失败")
+                        Log.e(TAG, "Failed to create OnlineRecognizer")
 
-            // 启动识别任务
-            startRecognitionTask()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting ASR recognition", e)
-            updateStatus("启动识别失败: ${e.message}")
+                        // 返回STANDBY模式
+                        if (keywordSpotter != null) {
+                            kwsStream = keywordSpotter?.createStream()
+                            wakeState = WakeState.STANDBY
+                            btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
+                            updateStatus("⏸️ 待机中，等待唤醒词...")
+                            startKwsTask()
+                        }
+                    }
+                    return@launch
+                }
 
-            // 识别启动失败，返回STANDBY模式
-            if (keywordSpotter != null) {
-                kwsStream = keywordSpotter?.createStream()
-                wakeState = WakeState.STANDBY
-                btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
-                updateStatus("⏸️ 待机中，等待唤醒词...")
-                startKwsTask()
+                // 创建识别流
+                stream = recognizer?.createStream()
+                lastSpeechTime = System.currentTimeMillis()
+
+                withContext(Dispatchers.Main) {
+                    updateStatus("🎙️ 正在识别...")
+                    tvResult.text = ""
+                }
+
+                // 启动识别任务
+                startRecognitionTask()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting ASR recognition", e)
+                withContext(Dispatchers.Main) {
+                    updateStatus("启动识别失败: ${e.message}")
+
+                    // 识别启动失败，返回STANDBY模式
+                    if (keywordSpotter != null) {
+                        kwsStream = keywordSpotter?.createStream()
+                        wakeState = WakeState.STANDBY
+                        btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
+                        updateStatus("⏸️ 待机中，等待唤醒词...")
+                        startKwsTask()
+                    }
+                }
             }
         }
     }
@@ -505,9 +551,12 @@ class MainActivity : AppCompatActivity() {
                                     // 保存最终识别结果
                                     tvResult.text = completedText.toString()
 
-                                    // 释放ASR流
+                                    // 释放ASR流和识别器（节省内存）
                                     stream?.release()
                                     stream = null
+                                    recognizer?.release()
+                                    recognizer = null
+                                    Log.i(TAG, "Released OnlineRecognizer to save memory")
 
                                     // 切换回STANDBY模式
                                     wakeState = WakeState.STANDBY
