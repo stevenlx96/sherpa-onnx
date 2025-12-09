@@ -67,6 +67,9 @@ class AudioRecorder(
             shouldCacheInMemory = cacheInMemory
 
             if (savePcm) {
+                // 先清理旧缓存（如果超过限制）
+                cleanOldCacheFiles(maxCacheSizeBytes = 500 * 1024 * 1024, keepRecentCount = 1)
+
                 // 创建PCM缓存文件
                 val timestamp = System.currentTimeMillis()
                 currentPcmFile = File(cacheDir, "audio_${timestamp}.pcm")
@@ -172,5 +175,97 @@ class AudioRecorder(
      */
     fun clearPcmCache() {
         pcmBuffer.clear()
+    }
+
+    /**
+     * 清理旧的缓存文件，保留最新的
+     * @param maxCacheSizeBytes 最大缓存大小（字节），默认 500MB
+     * @param keepRecentCount 保留最近的文件数量，默认 1 个
+     */
+    fun cleanOldCacheFiles(
+        maxCacheSizeBytes: Long = 500 * 1024 * 1024,  // 500 MB
+        keepRecentCount: Int = 1
+    ) {
+        try {
+            // 获取所有 PCM 缓存文件
+            val cacheFiles = cacheDir.listFiles()?.filter { it.extension == "pcm" } ?: return
+
+            if (cacheFiles.isEmpty()) {
+                Log.d(TAG, "No cache files found")
+                return
+            }
+
+            // 按修改时间排序，最新的在前
+            val sortedFiles = cacheFiles.sortedByDescending { it.lastModified() }
+
+            // 计算总大小
+            val totalSize = sortedFiles.sumOf { it.length() }
+
+            Log.i(TAG, "Cache directory: ${cacheDir.absolutePath}")
+            Log.i(TAG, "Total cache size: ${totalSize / 1024 / 1024} MB (${sortedFiles.size} files)")
+
+            if (totalSize > maxCacheSizeBytes) {
+                Log.i(TAG, "Cache size exceeds limit (${maxCacheSizeBytes / 1024 / 1024} MB), cleaning old files...")
+
+                // 保留最新的 keepRecentCount 个，删除其他所有
+                val filesToDelete = sortedFiles.drop(keepRecentCount)
+                var deletedSize = 0L
+                var deletedCount = 0
+
+                filesToDelete.forEach { file ->
+                    val fileSize = file.length()
+                    if (file.delete()) {
+                        deletedSize += fileSize
+                        deletedCount++
+                        Log.d(TAG, "Deleted old cache file: ${file.name} (${fileSize / 1024 / 1024} MB)")
+                    } else {
+                        Log.w(TAG, "Failed to delete cache file: ${file.name}")
+                    }
+                }
+
+                Log.i(TAG, "Cleaned $deletedCount files, freed ${deletedSize / 1024 / 1024} MB")
+                Log.i(TAG, "Remaining: ${sortedFiles.take(keepRecentCount).size} files, ${(totalSize - deletedSize) / 1024 / 1024} MB")
+            } else {
+                Log.d(TAG, "Cache size within limit, no cleanup needed")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning cache files", e)
+        }
+    }
+
+    /**
+     * 获取缓存目录的总大小（字节）
+     */
+    fun getCacheSize(): Long {
+        return try {
+            cacheDir.listFiles()?.filter { it.extension == "pcm" }?.sumOf { it.length() } ?: 0L
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating cache size", e)
+            0L
+        }
+    }
+
+    /**
+     * 删除所有缓存文件
+     */
+    fun deleteAllCacheFiles() {
+        try {
+            val cacheFiles = cacheDir.listFiles()?.filter { it.extension == "pcm" } ?: return
+            var deletedCount = 0
+            var deletedSize = 0L
+
+            cacheFiles.forEach { file ->
+                val fileSize = file.length()
+                if (file.delete()) {
+                    deletedCount++
+                    deletedSize += fileSize
+                    Log.d(TAG, "Deleted cache file: ${file.name}")
+                }
+            }
+
+            Log.i(TAG, "Deleted all cache files: $deletedCount files, ${deletedSize / 1024 / 1024} MB")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting cache files", e)
+        }
     }
 }

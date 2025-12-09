@@ -634,10 +634,23 @@ class MainActivity : AppCompatActivity() {
      * 清除缓存
      */
     private fun clearCache() {
+        // 显示当前缓存大小
+        val cacheSize = audioRecorder?.getCacheSize() ?: 0L
+        val cacheSizeMB = cacheSize / 1024 / 1024
+
+        // 清除内存缓存
         audioRecorder?.clearPcmCache()
+
+        // 删除所有磁盘缓存文件
+        audioRecorder?.deleteAllCacheFiles()
+
+        // 清空结果显示
         tvResult.text = ""
-        Toast.makeText(this, "缓存已清除", Toast.LENGTH_SHORT).show()
-        updateStatus("缓存已清除")
+
+        val message = "已清除缓存 ($cacheSizeMB MB)"
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        updateStatus(message)
+        Log.i(TAG, "User cleared cache: $cacheSizeMB MB")
     }
 
     /**
