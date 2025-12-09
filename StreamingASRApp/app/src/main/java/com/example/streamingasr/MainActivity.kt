@@ -150,16 +150,9 @@ class MainActivity : AppCompatActivity() {
                 // 检查是否有 keywords.txt 文件
                 val hasKeywords = modelManager.checkKwsExists()
 
-                // 加载 VAD 模型（可选，两种模式都需要）
-                vad = modelManager.createVad(
-                    threshold = 0.5F,
-                    minSilenceDuration = 0.3F,
-                    minSpeechDuration = 0.25F,
-                    maxSpeechDuration = 10.0F
-                )
-
                 if (hasKeywords) {
-                    // KWS 模式：只加载 KeywordSpotter（ASR 会在唤醒后动态创建）
+                    // KWS 模式：只加载 KeywordSpotter
+                    // VAD 会在唤醒后创建，避免与 KWS 资源冲突
                     keywordSpotter = modelManager.createKeywordSpotter(
                         keywordsFile = "keywords.txt",
                         threshold = 0.25F,
@@ -168,8 +161,7 @@ class MainActivity : AppCompatActivity() {
 
                     withContext(Dispatchers.Main) {
                         if (keywordSpotter != null) {
-                            val vadStatus = if (vad != null) "✓ VAD已启用" else "✗ VAD未加载"
-                            updateStatus("✓ KWS唤醒模式已启用\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus\n\n点击\"开始监听\"进入待机模式")
+                            updateStatus("✓ KWS唤醒模式已启用\n模型路径: ${modelManager.getModelDir().absolutePath}\n\n点击\"开始监听\"进入待机模式\n唤醒后自动启用 VAD 智能断句")
                             btnStartStop.text = "开始监听"
                             Log.i(TAG, "KeywordSpotter initialized successfully (KWS mode)")
                         } else {
@@ -178,9 +170,17 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    // 直接识别模式：加载 ASR
+                    // 直接识别模式：加载 ASR + VAD
                     recognizer = modelManager.createOnlineRecognizer(
                         modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+                    )
+
+                    // 加载 VAD（仅在直接识别模式）
+                    vad = modelManager.createVad(
+                        threshold = 0.5F,
+                        minSilenceDuration = 0.3F,
+                        minSpeechDuration = 0.25F,
+                        maxSpeechDuration = 10.0F
                     )
 
                     withContext(Dispatchers.Main) {
@@ -382,12 +382,27 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
+                // 动态创建 VAD（在 KWS 模式下唤醒后创建）
+                if (vad == null) {
+                    Log.i(TAG, "Creating VAD on wake...")
+                    vad = modelManager.createVad(
+                        threshold = 0.5F,
+                        minSilenceDuration = 0.3F,
+                        minSpeechDuration = 0.25F,
+                        maxSpeechDuration = 10.0F
+                    )
+                    if (vad != null) {
+                        Log.i(TAG, "VAD created successfully")
+                    }
+                }
+
                 // 创建识别流
                 stream = recognizer?.createStream()
                 lastSpeechTime = System.currentTimeMillis()
 
                 withContext(Dispatchers.Main) {
-                    updateStatus("🎙️ 正在识别...")
+                    val vadStatus = if (vad != null) " (VAD智能断句)" else ""
+                    updateStatus("🎙️ 正在识别...$vadStatus")
                     tvResult.text = ""
                 }
 
@@ -551,12 +566,14 @@ class MainActivity : AppCompatActivity() {
                                     // 保存最终识别结果
                                     tvResult.text = completedText.toString()
 
-                                    // 释放ASR流和识别器（节省内存）
+                                    // 释放ASR流、识别器和VAD（节省内存）
                                     stream?.release()
                                     stream = null
                                     recognizer?.release()
                                     recognizer = null
-                                    Log.i(TAG, "Released OnlineRecognizer to save memory")
+                                    vad?.release()
+                                    vad = null
+                                    Log.i(TAG, "Released OnlineRecognizer and VAD to save memory")
 
                                     // 切换回STANDBY模式
                                     wakeState = WakeState.STANDBY
