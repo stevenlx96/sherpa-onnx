@@ -39,16 +39,35 @@ class ModelManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelManager"
         private const val MODEL_DIR_NAME = "models"
+        private const val ASR_SUBDIR = "asr"
+        private const val KWS_SUBDIR = "kws"
+        private const val VAD_SUBDIR = "vad"
     }
 
     // 模型文件存储在应用内部存储: /data/data/com.example.streamingasr/files/models/
     private val modelDir: File = File(context.filesDir, MODEL_DIR_NAME)
+    private val asrDir: File = File(modelDir, ASR_SUBDIR)
+    private val kwsDir: File = File(modelDir, KWS_SUBDIR)
+    private val vadDir: File = File(modelDir, VAD_SUBDIR)
 
     init {
         // 确保模型目录存在
         if (!modelDir.exists()) {
             modelDir.mkdirs()
             Log.i(TAG, "Created model directory: ${modelDir.absolutePath}")
+        }
+        // 创建子目录
+        if (!asrDir.exists()) {
+            asrDir.mkdirs()
+            Log.i(TAG, "Created ASR directory: ${asrDir.absolutePath}")
+        }
+        if (!kwsDir.exists()) {
+            kwsDir.mkdirs()
+            Log.i(TAG, "Created KWS directory: ${kwsDir.absolutePath}")
+        }
+        if (!vadDir.exists()) {
+            vadDir.mkdirs()
+            Log.i(TAG, "Created VAD directory: ${vadDir.absolutePath}")
         }
     }
 
@@ -63,21 +82,21 @@ class ModelManager(private val context: Context) {
     fun checkModelExists(modelType: ModelType): Boolean {
         return when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
-                val encoder = File(modelDir, "encoder-epoch-99-avg-1.onnx")
-                val decoder = File(modelDir, "decoder-epoch-99-avg-1.onnx")
-                val joiner = File(modelDir, "joiner-epoch-99-avg-1.onnx")
-                val tokens = File(modelDir, "tokens.txt")
+                val encoder = File(asrDir, "encoder-epoch-99-avg-1.onnx")
+                val decoder = File(asrDir, "decoder-epoch-99-avg-1.onnx")
+                val joiner = File(asrDir, "joiner-epoch-99-avg-1.onnx")
+                val tokens = File(asrDir, "tokens.txt")
                 encoder.exists() && decoder.exists() && joiner.exists() && tokens.exists()
             }
             ModelType.PARAFORMER -> {
-                val encoder = File(modelDir, "encoder.int8.onnx")
-                val decoder = File(modelDir, "decoder.int8.onnx")
-                val tokens = File(modelDir, "tokens.txt")
+                val encoder = File(asrDir, "encoder.int8.onnx")
+                val decoder = File(asrDir, "decoder.int8.onnx")
+                val tokens = File(asrDir, "tokens.txt")
                 encoder.exists() && decoder.exists() && tokens.exists()
             }
             ModelType.ZIPFORMER_CTC -> {
-                val model = File(modelDir, "model.int8.onnx")
-                val tokens = File(modelDir, "tokens.txt")
+                val model = File(asrDir, "model.int8.onnx")
+                val tokens = File(asrDir, "tokens.txt")
                 model.exists() && tokens.exists()
             }
         }
@@ -162,10 +181,10 @@ class ModelManager(private val context: Context) {
     fun createOnlineRecognizerAuto(
         numThreads: Int = Runtime.getRuntime().availableProcessors()
     ): OnlineRecognizer? {
-        Log.i(TAG, "Auto-detecting model files in: ${modelDir.absolutePath}")
+        Log.i(TAG, "Auto-detecting model files in: ${asrDir.absolutePath}")
 
-        val files = modelDir.listFiles() ?: run {
-            Log.e(TAG, "Model directory is empty or inaccessible")
+        val files = asrDir.listFiles() ?: run {
+            Log.e(TAG, "ASR directory is empty or inaccessible")
             return null
         }
 
@@ -217,11 +236,11 @@ class ModelManager(private val context: Context) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
                 OnlineModelConfig(
                     transducer = OnlineTransducerModelConfig(
-                        encoder = File(modelDir, "encoder-epoch-99-avg-1.onnx").absolutePath,
-                        decoder = File(modelDir, "decoder-epoch-99-avg-1.onnx").absolutePath,
-                        joiner = File(modelDir, "joiner-epoch-99-avg-1.onnx").absolutePath
+                        encoder = File(asrDir, "encoder-epoch-99-avg-1.onnx").absolutePath,
+                        decoder = File(asrDir, "decoder-epoch-99-avg-1.onnx").absolutePath,
+                        joiner = File(asrDir, "joiner-epoch-99-avg-1.onnx").absolutePath
                     ),
-                    tokens = File(modelDir, "tokens.txt").absolutePath,
+                    tokens = File(asrDir, "tokens.txt").absolutePath,
                     numThreads = numThreads,
                     provider = "cpu",
                     debug = false
@@ -230,10 +249,10 @@ class ModelManager(private val context: Context) {
             ModelType.PARAFORMER -> {
                 OnlineModelConfig(
                     paraformer = OnlineParaformerModelConfig(
-                        encoder = File(modelDir, "encoder.int8.onnx").absolutePath,
-                        decoder = File(modelDir, "decoder.int8.onnx").absolutePath
+                        encoder = File(asrDir, "encoder.int8.onnx").absolutePath,
+                        decoder = File(asrDir, "decoder.int8.onnx").absolutePath
                     ),
-                    tokens = File(modelDir, "tokens.txt").absolutePath,
+                    tokens = File(asrDir, "tokens.txt").absolutePath,
                     numThreads = numThreads,
                     provider = "cpu",
                     debug = false
@@ -242,9 +261,9 @@ class ModelManager(private val context: Context) {
             ModelType.ZIPFORMER_CTC -> {
                 OnlineModelConfig(
                     zipformer2Ctc = OnlineZipformer2CtcModelConfig(
-                        model = File(modelDir, "model.int8.onnx").absolutePath
+                        model = File(asrDir, "model.int8.onnx").absolutePath
                     ),
-                    tokens = File(modelDir, "tokens.txt").absolutePath,
+                    tokens = File(asrDir, "tokens.txt").absolutePath,
                     numThreads = numThreads,
                     provider = "cpu",
                     debug = false
@@ -279,10 +298,10 @@ class ModelManager(private val context: Context) {
         val modelConfig = when {
             // Transducer 模型（encoder + decoder + joiner）
             modelFiles.encoder != null && modelFiles.decoder != null && modelFiles.joiner != null -> {
-                val encoderFile = File(modelDir, modelFiles.encoder)
-                val decoderFile = File(modelDir, modelFiles.decoder)
-                val joinerFile = File(modelDir, modelFiles.joiner)
-                val tokensFile = File(modelDir, modelFiles.tokens)
+                val encoderFile = File(asrDir, modelFiles.encoder)
+                val decoderFile = File(asrDir, modelFiles.decoder)
+                val joinerFile = File(asrDir, modelFiles.joiner)
+                val tokensFile = File(asrDir, modelFiles.tokens)
 
                 require(encoderFile.exists()) { "Encoder file not found: ${encoderFile.absolutePath}" }
                 require(decoderFile.exists()) { "Decoder file not found: ${decoderFile.absolutePath}" }
@@ -309,8 +328,8 @@ class ModelManager(private val context: Context) {
 
             // Paraformer/CTC 单文件模型
             modelFiles.model != null -> {
-                val modelFile = File(modelDir, modelFiles.model)
-                val tokensFile = File(modelDir, modelFiles.tokens)
+                val modelFile = File(asrDir, modelFiles.model)
+                val tokensFile = File(asrDir, modelFiles.tokens)
 
                 require(modelFile.exists()) { "Model file not found: ${modelFile.absolutePath}" }
                 require(tokensFile.exists()) { "Tokens file not found: ${tokensFile.absolutePath}" }
@@ -368,8 +387,8 @@ class ModelManager(private val context: Context) {
      * 如果lexicon.txt和replace.fst都存在，则启用同音字替换功能
      */
     private fun createHomophoneReplacerConfig(): HomophoneReplacerConfig {
-        val lexiconFile = File(modelDir, "lexicon.txt")
-        val replaceFstFile = File(modelDir, "replace.fst")
+        val lexiconFile = File(asrDir, "lexicon.txt")
+        val replaceFstFile = File(asrDir, "replace.fst")
 
         return if (lexiconFile.exists() && replaceFstFile.exists()) {
             Log.i(TAG, "HomophoneReplacer enabled: lexicon=${lexiconFile.absolutePath}, fst=${replaceFstFile.absolutePath}")
@@ -394,8 +413,8 @@ class ModelManager(private val context: Context) {
     private fun createHomophoneReplacerConfig(modelFiles: ModelFiles): HomophoneReplacerConfig {
         // 如果ModelFiles中指定了自定义的lexicon和replaceFst
         if (modelFiles.lexicon != null && modelFiles.replaceFst != null) {
-            val lexiconFile = File(modelDir, modelFiles.lexicon)
-            val replaceFstFile = File(modelDir, modelFiles.replaceFst)
+            val lexiconFile = File(asrDir, modelFiles.lexicon)
+            val replaceFstFile = File(asrDir, modelFiles.replaceFst)
 
             return if (lexiconFile.exists() && replaceFstFile.exists()) {
                 Log.i(TAG, "HomophoneReplacer enabled (custom): lexicon=${lexiconFile.absolutePath}, fst=${replaceFstFile.absolutePath}")
@@ -418,12 +437,17 @@ class ModelManager(private val context: Context) {
      */
     fun getModelDownloadInstructions(): String {
         return """
-            模型文件需要放置在:
-            ${modelDir.absolutePath}
+            模型文件需要按以下目录结构放置:
+            ${modelDir.absolutePath}/
+            ├── asr/        - ASR 语音识别模型
+            ├── kws/        - KWS 唤醒词检测模型
+            └── vad/        - VAD 语音活动检测模型
 
             ========================================
-            必需文件:
+            必需文件1: ASR 模型 (语音识别)
             ========================================
+
+            放置位置: ${asrDir.absolutePath}/
 
             1. Zipformer Transducer (推荐 - 中英文双语):
                需要的文件:
@@ -450,8 +474,31 @@ class ModelManager(private val context: Context) {
                - tokens.txt
 
             ========================================
-            推荐：Silero VAD (优化断句)
+            可选: KWS 模型 (唤醒词检测)
             ========================================
+
+            放置位置: ${kwsDir.absolutePath}/
+
+            需要的文件:
+            - encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+            - decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+            - joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+            - tokens.txt
+            - keywords.txt (唤醒词列表)
+
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+
+            功能说明:
+            - 提供"你好小智"等唤醒词检测功能
+            - 模型小 (3.3MB)，功耗低
+            - 如果不存在 keywords.txt，应用将以直接识别模式启动
+
+            ========================================
+            推荐: Silero VAD (优化断句)
+            ========================================
+
+            放置位置: ${vadDir.absolutePath}/
 
             文件名: silero_vad.onnx
 
@@ -465,8 +512,10 @@ class ModelManager(private val context: Context) {
             - 如果不存在，将使用内置的endpoint断句
 
             ========================================
-            可选：同音字替换功能 (HomophoneReplacer)
+            可选: 同音字替换功能 (HomophoneReplacer)
             ========================================
+
+            放置位置: ${asrDir.absolutePath}/
 
             需要的文件:
             - lexicon.txt (词典文件)
@@ -480,12 +529,26 @@ class ModelManager(private val context: Context) {
             这些文件是可选的，如果不存在则不启用同音字替换功能
 
             ========================================
-            使用adb推送模型:
+            使用adb推送模型示例:
             ========================================
 
-            adb push <模型文件> ${modelDir.absolutePath}/
+            # 推送 ASR 模型
+            adb push encoder-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push decoder-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push joiner-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push tokens.txt ${asrDir.absolutePath}/
 
-            或者使用应用的文件管理功能将模型复制到此目录
+            # 推送 KWS 模型 (可选)
+            adb push encoder-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push decoder-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push joiner-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push tokens.txt ${kwsDir.absolutePath}/
+            adb push keywords.txt ${kwsDir.absolutePath}/
+
+            # 推送 VAD 模型 (推荐)
+            adb push silero_vad.onnx ${vadDir.absolutePath}/
+
+            或者使用应用的文件管理功能将模型复制到对应目录
         """.trimIndent()
     }
 
@@ -510,7 +573,7 @@ class ModelManager(private val context: Context) {
         minSpeechDuration: Float = 0.25F,
         maxSpeechDuration: Float = 10.0F
     ): Vad? {
-        val vadModelFile = File(modelDir, "silero_vad.onnx")
+        val vadModelFile = File(vadDir, "silero_vad.onnx")
 
         if (!vadModelFile.exists()) {
             Log.e(TAG, "VAD model not found: ${vadModelFile.absolutePath}")
@@ -549,7 +612,7 @@ class ModelManager(private val context: Context) {
      * 检查 VAD 模型是否存在
      */
     fun checkVadExists(): Boolean {
-        val vadModelFile = File(modelDir, "silero_vad.onnx")
+        val vadModelFile = File(vadDir, "silero_vad.onnx")
         return vadModelFile.exists()
     }
 
@@ -572,14 +635,14 @@ class ModelManager(private val context: Context) {
         numThreads: Int = 1
     ): KeywordSpotter? {
         // KWS 专用模型文件（wenetspeech 中文唤醒词模型）
-        val kwsEncoderFile = File(modelDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsDecoderFile = File(modelDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsJoinerFile = File(modelDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsTokensFile = File(modelDir, "tokens.txt")
-        val kwFile = File(modelDir, keywordsFile)
+        val kwsEncoderFile = File(kwsDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsDecoderFile = File(kwsDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsJoinerFile = File(kwsDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsTokensFile = File(kwsDir, "tokens.txt")
+        val kwFile = File(kwsDir, keywordsFile)
 
         if (!kwsEncoderFile.exists() || !kwsDecoderFile.exists() || !kwsJoinerFile.exists()) {
-            Log.e(TAG, "KWS model files not found in ${modelDir.absolutePath}")
+            Log.e(TAG, "KWS model files not found in ${kwsDir.absolutePath}")
             Log.e(TAG, "Expected files:")
             Log.e(TAG, "  - encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
             Log.e(TAG, "  - decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
@@ -597,7 +660,7 @@ class ModelManager(private val context: Context) {
             return null
         }
 
-        Log.i(TAG, "Loading KWS model from: ${modelDir.absolutePath}")
+        Log.i(TAG, "Loading KWS model from: ${kwsDir.absolutePath}")
         Log.i(TAG, "KWS Encoder: ${kwsEncoderFile.name}")
         Log.i(TAG, "Keywords file: ${kwFile.absolutePath}")
         Log.i(TAG, "KWS config: threshold=$threshold, score=$score")
@@ -642,11 +705,11 @@ class ModelManager(private val context: Context) {
      * 检查 KWS 专用模型和关键词文件是否存在
      */
     fun checkKwsExists(keywordsFile: String = "keywords.txt"): Boolean {
-        val kwsEncoderFile = File(modelDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsDecoderFile = File(modelDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsJoinerFile = File(modelDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
-        val kwsTokensFile = File(modelDir, "tokens.txt")
-        val kwFile = File(modelDir, keywordsFile)
+        val kwsEncoderFile = File(kwsDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsDecoderFile = File(kwsDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsJoinerFile = File(kwsDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsTokensFile = File(kwsDir, "tokens.txt")
+        val kwFile = File(kwsDir, keywordsFile)
 
         return kwsEncoderFile.exists() && kwsDecoderFile.exists() &&
                kwsJoinerFile.exists() && kwsTokensFile.exists() && kwFile.exists()

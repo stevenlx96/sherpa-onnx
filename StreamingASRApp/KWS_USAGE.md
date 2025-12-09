@@ -118,67 +118,99 @@ wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_v
 
 ## 📱 部署到手机
 
-所有模型文件放到同一个目录：
+**新版本使用子目录结构组织模型文件：**
 ```
 /data/data/com.example.streamingasr/files/models/
+├── asr/        - ASR 语音识别模型
+├── kws/        - KWS 唤醒词检测模型
+└── vad/        - VAD 语音活动检测模型
 ```
 
 **完整文件列表：**
 ```
 models/
-├── encoder-epoch-99-avg-1.onnx              (ASR)
-├── decoder-epoch-99-avg-1.onnx              (ASR)
-├── joiner-epoch-99-avg-1.onnx               (ASR)
-├── encoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS)
-├── decoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS)
-├── joiner-epoch-12-avg-2-chunk-16-left-64.onnx   (KWS)
-├── tokens.txt                               (共用)
-├── silero_vad.onnx                          (可选)
-└── keywords.txt                             (唤醒词)
+├── asr/
+│   ├── encoder-epoch-99-avg-1.onnx              (ASR 专用)
+│   ├── decoder-epoch-99-avg-1.onnx              (ASR 专用)
+│   ├── joiner-epoch-99-avg-1.onnx               (ASR 专用)
+│   └── tokens.txt                               (ASR)
+├── kws/
+│   ├── encoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS 专用)
+│   ├── decoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS 专用)
+│   ├── joiner-epoch-12-avg-2-chunk-16-left-64.onnx   (KWS 专用)
+│   ├── tokens.txt                               (KWS)
+│   └── keywords.txt                             (唤醒词列表)
+└── vad/
+    └── silero_vad.onnx                          (VAD 智能断句)
 ```
 
 ### 使用 adb 推送
 
 ```bash
-# 1. 推送 ASR 模型（100MB+，识别用）
+# 1. 推送 ASR 模型文件到 /data/local/tmp/
 adb push encoder-epoch-99-avg-1.onnx /data/local/tmp/
 adb push decoder-epoch-99-avg-1.onnx /data/local/tmp/
 adb push joiner-epoch-99-avg-1.onnx /data/local/tmp/
 
-# 2. 推送 KWS 专用模型（3.3MB，唤醒用）
+# 2. 推送 KWS 模型文件到 /data/local/tmp/
 adb push encoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
 adb push decoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
 adb push joiner-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
 
-# 3. 推送共用文件
+# 3. 推送其他文件
 adb push tokens.txt /data/local/tmp/
 adb push keywords.txt /data/local/tmp/
-
-# 4. 推送 VAD 模型（可选，智能断句）
 adb push silero_vad.onnx /data/local/tmp/
 
-# 5. 移动到应用目录
+# 4. 在手机上整理文件到子目录
 adb shell
 run-as com.example.streamingasr
-mkdir -p /data/data/com.example.streamingasr/files/models/
-cp /data/local/tmp/*.onnx /data/data/com.example.streamingasr/files/models/
-cp /data/local/tmp/tokens.txt /data/data/com.example.streamingasr/files/models/
-cp /data/local/tmp/keywords.txt /data/data/com.example.streamingasr/files/models/
-ls -lh /data/data/com.example.streamingasr/files/models/
+
+# 创建子目录结构
+mkdir -p /data/data/com.example.streamingasr/files/models/asr
+mkdir -p /data/data/com.example.streamingasr/files/models/kws
+mkdir -p /data/data/com.example.streamingasr/files/models/vad
+
+# 复制 ASR 模型到 asr/ 子目录
+cp /data/local/tmp/encoder-epoch-99-avg-1.onnx /data/data/com.example.streamingasr/files/models/asr/
+cp /data/local/tmp/decoder-epoch-99-avg-1.onnx /data/data/com.example.streamingasr/files/models/asr/
+cp /data/local/tmp/joiner-epoch-99-avg-1.onnx /data/data/com.example.streamingasr/files/models/asr/
+cp /data/local/tmp/tokens.txt /data/data/com.example.streamingasr/files/models/asr/
+
+# 复制 KWS 模型到 kws/ 子目录
+cp /data/local/tmp/encoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/data/com.example.streamingasr/files/models/kws/
+cp /data/local/tmp/decoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/data/com.example.streamingasr/files/models/kws/
+cp /data/local/tmp/joiner-epoch-12-avg-2-chunk-16-left-64.onnx /data/data/com.example.streamingasr/files/models/kws/
+cp /data/local/tmp/tokens.txt /data/data/com.example.streamingasr/files/models/kws/
+cp /data/local/tmp/keywords.txt /data/data/com.example.streamingasr/files/models/kws/
+
+# 复制 VAD 模型到 vad/ 子目录
+cp /data/local/tmp/silero_vad.onnx /data/data/com.example.streamingasr/files/models/vad/
+
+# 查看部署结果
+ls -lh /data/data/com.example.streamingasr/files/models/asr/
+ls -lh /data/data/com.example.streamingasr/files/models/kws/
+ls -lh /data/data/com.example.streamingasr/files/models/vad/
+
 exit
 ```
 
 **验证部署：**
 ```bash
-adb shell run-as com.example.streamingasr ls -lh /data/data/com.example.streamingasr/files/models/
+# 检查 ASR 模型
+adb shell run-as com.example.streamingasr ls -lh /data/data/com.example.streamingasr/files/models/asr/
+
+# 检查 KWS 模型
+adb shell run-as com.example.streamingasr ls -lh /data/data/com.example.streamingasr/files/models/kws/
+
+# 检查 VAD 模型
+adb shell run-as com.example.streamingasr ls -lh /data/data/com.example.streamingasr/files/models/vad/
 ```
 
 应该看到：
-- 3 个 ASR 模型文件（每个 30-40MB）
-- 3 个 KWS 模型文件（每个 1-2MB）
-- tokens.txt
-- keywords.txt
-- silero_vad.onnx（可选）
+- **asr/** 目录：3 个 ASR 模型文件（每个 30-40MB）+ tokens.txt
+- **kws/** 目录：3 个 KWS 模型文件（每个 1-2MB）+ tokens.txt + keywords.txt
+- **vad/** 目录：silero_vad.onnx（可选）
 
 ## ⚙️ 参数调优
 
