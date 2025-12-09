@@ -151,12 +151,12 @@ class MainActivity : AppCompatActivity() {
                 val hasKeywords = modelManager.checkKwsExists()
 
                 if (hasKeywords) {
-                    // KWS 模式：只加载 KeywordSpotter
+                    // KWS 模式：只加载 KeywordSpotter（使用专用 KWS 小模型）
                     // VAD 会在唤醒后创建，避免与 KWS 资源冲突
                     keywordSpotter = modelManager.createKeywordSpotter(
                         keywordsFile = "keywords.txt",
-                        threshold = 0.25F,
-                        score = 1.5F
+                        threshold = 0.5F,      // 唤醒阈值
+                        score = 1.0F           // 关键词分数
                     )
 
                     withContext(Dispatchers.Main) {

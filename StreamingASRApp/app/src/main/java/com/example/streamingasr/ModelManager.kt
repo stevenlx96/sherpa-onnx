@@ -555,29 +555,40 @@ class ModelManager(private val context: Context) {
 
     /**
      * 创建唤醒词识别器 (Keyword Spotter)
+     * 使用专用的 KWS 模型（小模型，专为唤醒词设计）
+     *
      * @param keywordsFile 关键词文件名 (默认 keywords.txt)
-     * @param threshold 唤醒阈值 (默认 0.25)
-     * @param score 关键词分数 (默认 1.5)
+     * @param threshold 唤醒阈值 (默认 0.5)
+     * @param score 关键词分数 (默认 1.0)
      * @param maxActivePaths 最大激活路径数 (默认 4)
      * @param numThreads 线程数
      * @return KeywordSpotter 或 null (如果模型不存在)
      */
     fun createKeywordSpotter(
         keywordsFile: String = "keywords.txt",
-        threshold: Float = 0.25F,
-        score: Float = 1.5F,
+        threshold: Float = 0.5F,
+        score: Float = 1.0F,
         maxActivePaths: Int = 4,
         numThreads: Int = 1
     ): KeywordSpotter? {
-        // 检查 KWS 模型文件（使用与ASR相同的transducer模型）
-        val encoderFile = File(modelDir, "encoder-epoch-99-avg-1.onnx")
-        val decoderFile = File(modelDir, "decoder-epoch-99-avg-1.onnx")
-        val joinerFile = File(modelDir, "joiner-epoch-99-avg-1.onnx")
-        val tokensFile = File(modelDir, "tokens.txt")
+        // KWS 专用模型文件（wenetspeech 中文唤醒词模型）
+        val kwsEncoderFile = File(modelDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsDecoderFile = File(modelDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsJoinerFile = File(modelDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsTokensFile = File(modelDir, "tokens.txt")
         val kwFile = File(modelDir, keywordsFile)
 
-        if (!encoderFile.exists() || !decoderFile.exists() || !joinerFile.exists() || !tokensFile.exists()) {
+        if (!kwsEncoderFile.exists() || !kwsDecoderFile.exists() || !kwsJoinerFile.exists()) {
             Log.e(TAG, "KWS model files not found in ${modelDir.absolutePath}")
+            Log.e(TAG, "Expected files:")
+            Log.e(TAG, "  - encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+            Log.e(TAG, "  - decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+            Log.e(TAG, "  - joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
+            return null
+        }
+
+        if (!kwsTokensFile.exists()) {
+            Log.e(TAG, "KWS tokens file not found: ${kwsTokensFile.absolutePath}")
             return null
         }
 
@@ -587,16 +598,17 @@ class ModelManager(private val context: Context) {
         }
 
         Log.i(TAG, "Loading KWS model from: ${modelDir.absolutePath}")
+        Log.i(TAG, "KWS Encoder: ${kwsEncoderFile.name}")
         Log.i(TAG, "Keywords file: ${kwFile.absolutePath}")
         Log.i(TAG, "KWS config: threshold=$threshold, score=$score")
 
         val modelConfig = OnlineModelConfig(
             transducer = OnlineTransducerModelConfig(
-                encoder = encoderFile.absolutePath,
-                decoder = decoderFile.absolutePath,
-                joiner = joinerFile.absolutePath
+                encoder = kwsEncoderFile.absolutePath,
+                decoder = kwsDecoderFile.absolutePath,
+                joiner = kwsJoinerFile.absolutePath
             ),
-            tokens = tokensFile.absolutePath,
+            tokens = kwsTokensFile.absolutePath,
             numThreads = numThreads,
             provider = "cpu",
             debug = false,
@@ -613,12 +625,12 @@ class ModelManager(private val context: Context) {
             keywordsFile = kwFile.absolutePath,
             keywordsScore = score,
             keywordsThreshold = threshold,
-            numTrailingBlanks = 2
+            numTrailingBlanks = 1
         )
 
         return try {
             val kws = KeywordSpotter(assetManager = null, config = kwsConfig)
-            Log.i(TAG, "KeywordSpotter created successfully")
+            Log.i(TAG, "KeywordSpotter created successfully with dedicated KWS model")
             kws
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create KeywordSpotter", e)
@@ -627,17 +639,17 @@ class ModelManager(private val context: Context) {
     }
 
     /**
-     * 检查 KWS 模型和关键词文件是否存在
+     * 检查 KWS 专用模型和关键词文件是否存在
      */
     fun checkKwsExists(keywordsFile: String = "keywords.txt"): Boolean {
-        val encoderFile = File(modelDir, "encoder-epoch-99-avg-1.onnx")
-        val decoderFile = File(modelDir, "decoder-epoch-99-avg-1.onnx")
-        val joinerFile = File(modelDir, "joiner-epoch-99-avg-1.onnx")
-        val tokensFile = File(modelDir, "tokens.txt")
+        val kwsEncoderFile = File(modelDir, "encoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsDecoderFile = File(modelDir, "decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsJoinerFile = File(modelDir, "joiner-epoch-12-avg-2-chunk-16-left-64.onnx")
+        val kwsTokensFile = File(modelDir, "tokens.txt")
         val kwFile = File(modelDir, keywordsFile)
 
-        return encoderFile.exists() && decoderFile.exists() &&
-               joinerFile.exists() && tokensFile.exists() && kwFile.exists()
+        return kwsEncoderFile.exists() && kwsDecoderFile.exists() &&
+               kwsJoinerFile.exists() && kwsTokensFile.exists() && kwFile.exists()
     }
 
     /**

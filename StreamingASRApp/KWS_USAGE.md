@@ -63,7 +63,7 @@ StreamingASRApp 现已集成 **唤醒词检测 (KWS)**，实现智能语音唤�
 
 ## 📦 模型文件下载
 
-### 必需：ASR 模型（KWS 与 ASR 共用同一个模型）
+### 必需1：ASR 模型（用于语音识别）
 
 ```bash
 # 下载中英文双语 Zipformer Transducer 模型
@@ -72,12 +72,32 @@ tar xvf sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2
 ```
 
 需要的文件：
-- `encoder-epoch-99-avg-1.onnx`
-- `decoder-epoch-99-avg-1.onnx`
-- `joiner-epoch-99-avg-1.onnx`
+- `encoder-epoch-99-avg-1.onnx` (ASR 专用)
+- `decoder-epoch-99-avg-1.onnx` (ASR 专用)
+- `joiner-epoch-99-avg-1.onnx` (ASR 专用)
 - `tokens.txt`
 
-### 必需：keywords.txt（唤醒词配置文件）
+### 必需2：KWS 专用模型（用于唤醒词检测）
+
+**重要：KWS 和 ASR 使用不同的模型！**
+
+```bash
+# 下载中文唤醒词专用模型（wenetspeech，3.3MB）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+tar xvf sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+```
+
+需要的文件：
+- `encoder-epoch-12-avg-2-chunk-16-left-64.onnx` (KWS 专用)
+- `decoder-epoch-12-avg-2-chunk-16-left-64.onnx` (KWS 专用)
+- `joiner-epoch-12-avg-2-chunk-16-left-64.onnx` (KWS 专用)
+- `tokens.txt` (KWS 和 ASR 共用)
+
+**模型大小对比：**
+- ASR 模型：~100MB（大模型，高精度识别）
+- KWS 模型：~3.3MB（小模型，专为唤醒词优化）
+
+### 必需3：keywords.txt（唤醒词配置文件）
 
 创建 `keywords.txt` 文件，每行一个唤醒词：
 
@@ -103,57 +123,90 @@ wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_v
 /data/data/com.example.streamingasr/files/models/
 ```
 
+**完整文件列表：**
+```
+models/
+├── encoder-epoch-99-avg-1.onnx              (ASR)
+├── decoder-epoch-99-avg-1.onnx              (ASR)
+├── joiner-epoch-99-avg-1.onnx               (ASR)
+├── encoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS)
+├── decoder-epoch-12-avg-2-chunk-16-left-64.onnx  (KWS)
+├── joiner-epoch-12-avg-2-chunk-16-left-64.onnx   (KWS)
+├── tokens.txt                               (共用)
+├── silero_vad.onnx                          (可选)
+└── keywords.txt                             (唤醒词)
+```
+
 ### 使用 adb 推送
 
 ```bash
-# 推送 ASR 模型
+# 1. 推送 ASR 模型（100MB+，识别用）
 adb push encoder-epoch-99-avg-1.onnx /data/local/tmp/
 adb push decoder-epoch-99-avg-1.onnx /data/local/tmp/
 adb push joiner-epoch-99-avg-1.onnx /data/local/tmp/
+
+# 2. 推送 KWS 专用模型（3.3MB，唤醒用）
+adb push encoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
+adb push decoder-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
+adb push joiner-epoch-12-avg-2-chunk-16-left-64.onnx /data/local/tmp/
+
+# 3. 推送共用文件
 adb push tokens.txt /data/local/tmp/
-
-# 推送 VAD 模型
-adb push silero_vad.onnx /data/local/tmp/
-
-# 推送唤醒词文件
 adb push keywords.txt /data/local/tmp/
 
-# 移动到应用目录
+# 4. 推送 VAD 模型（可选，智能断句）
+adb push silero_vad.onnx /data/local/tmp/
+
+# 5. 移动到应用目录
 adb shell
 run-as com.example.streamingasr
 mkdir -p /data/data/com.example.streamingasr/files/models/
 cp /data/local/tmp/*.onnx /data/data/com.example.streamingasr/files/models/
 cp /data/local/tmp/tokens.txt /data/data/com.example.streamingasr/files/models/
 cp /data/local/tmp/keywords.txt /data/data/com.example.streamingasr/files/models/
+ls -lh /data/data/com.example.streamingasr/files/models/
 exit
 ```
+
+**验证部署：**
+```bash
+adb shell run-as com.example.streamingasr ls -lh /data/data/com.example.streamingasr/files/models/
+```
+
+应该看到：
+- 3 个 ASR 模型文件（每个 30-40MB）
+- 3 个 KWS 模型文件（每个 1-2MB）
+- tokens.txt
+- keywords.txt
+- silero_vad.onnx（可选）
 
 ## ⚙️ 参数调优
 
 ### KWS 参数
 
-在 `MainActivity.kt:159-163` 中调整 KWS 参数：
+在 `MainActivity.kt:156-160` 中调整 KWS 参数：
 
 ```kotlin
 keywordSpotter = modelManager.createKeywordSpotter(
     keywordsFile = "keywords.txt",
-    threshold = 0.25F,              // 唤醒阈值 (0.1-0.5)
-    score = 1.5F                    // 关键词分数 (1.0-2.0)
+    threshold = 0.5F,               // 唤醒阈值 (0.3-0.9)
+    score = 1.0F                    // 关键词分数 (0.5-2.0)
 )
 ```
 
 | 参数 | 说明 | 推荐值 | 影响 |
 |------|------|--------|------|
-| `threshold` | 唤醒阈值 | 0.25 | 越低越灵敏，但误唤醒率高 |
-| `score` | 关键词分数 | 1.5 | 越高越严格，降低误唤醒 |
+| `threshold` | 唤醒阈值 | 0.5 | 越低越灵敏，但误唤醒率高 |
+| `score` | 关键词分数 | 1.0 | 越高越严格，降低误唤醒 |
 
-### 调优建议
+### 调优建议（专用 KWS 模型）
 
 | 场景 | threshold | score | 说明 |
 |------|-----------|-------|------|
-| **安静环境** | 0.2-0.25 | 1.5 | ⭐ **推荐**，误唤醒少 |
-| 嘈杂环境 | 0.3-0.4 | 2.0 | 降低误唤醒，但可能难唤醒 |
-| 高灵敏度 | 0.15-0.2 | 1.0 | 容易唤醒，但误唤醒多 |
+| **正常使用** | 0.5 | 1.0 | ⭐ **推荐**，平衡灵敏度和准确度 |
+| 安静环境 | 0.4-0.5 | 0.8-1.0 | 更易唤醒，适合清晰发音 |
+| 嘈杂环境 | 0.6-0.7 | 1.2-1.5 | 降低误唤醒，但需清晰发音 |
+| 高灵敏度 | 0.3-0.4 | 0.5-0.8 | 容易唤醒，但误唤醒多 |
 
 ### 自动休眠时间
 
@@ -248,18 +301,28 @@ A: 启动应用后查看按钮文本：
 - `✓ 直接识别模式` - 直接模式
 
 ### Q: 之前版本崩溃了，现在修复了吗？
-A: **已完全修复**！崩溃有两个原因，都已解决：
+A: **已完全修复**！崩溃的根本原因是 **模型不匹配**，现在已解决：
 
-1. **第一次崩溃**：KWS 和 ASR 同时加载导致资源冲突
-   - ✓ 修复：启动时只加载一种识别器（KWS 或 ASR）
+**问题根源：**
+- ❌ 尝试用 ASR 大模型做 KWS（不兼容，导致 pthread_mutex 错误）
+- ❌ 同时创建多个模型（资源冲突）
 
-2. **第二次崩溃**：VAD 和 KWS 同时创建导致 ONNX Runtime 冲突
-   - ✓ 修复：KWS 模式下 VAD **延迟到唤醒后**再创建
+**最终方案：**
+1. ✓ **分离模型**：KWS 和 ASR 使用各自专用的模型
+   - KWS: `encoder-epoch-12-avg-2-chunk-16-left-64.onnx` (3.3MB)
+   - ASR: `encoder-epoch-99-avg-1.onnx` (40MB)
 
-**最终方案**：
-- STANDBY: 仅 KWS
-- 唤醒: 动态创建 ASR + VAD
-- 休眠: 释放 ASR + VAD
+2. ✓ **延迟加载**：避免资源冲突
+   - STANDBY: 仅 KWS
+   - 唤醒: 动态创建 ASR + VAD
+   - 休眠: 释放 ASR + VAD
+
+### Q: 为什么需要两套模型？
+A: KWS 和 ASR 是不同的任务：
+- **KWS**：检测特定唤醒词，需要小模型快速响应（3.3MB）
+- **ASR**：识别任意语音内容，需要大模型高精度（100MB+）
+
+不能混用！ASR 模型不能直接用于 KWS。
 
 ### Q: 唤醒词识别不准确怎么办？
 A: 调整参数：
