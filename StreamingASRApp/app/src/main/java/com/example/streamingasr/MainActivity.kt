@@ -270,8 +270,8 @@ class MainActivity : AppCompatActivity() {
             // 创建KWS流
             kwsStream = keywordSpotter?.createStream()
 
-            // 开始录制（不保存PCM）
-            if (audioRecorder?.startRecording(savePcm = false) == true) {
+            // 开始录制（不保存PCM，不缓存到内存）
+            if (audioRecorder?.startRecording(savePcm = false, cacheInMemory = false) == true) {
                 isRecording = true
                 wakeState = WakeState.STANDBY
                 btnStartStop.text = "停止监听"

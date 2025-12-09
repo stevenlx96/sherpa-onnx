@@ -27,6 +27,7 @@ class AudioRecorder(
     private var isRecording = false
     private var currentPcmFile: File? = null
     private var pcmOutputStream: FileOutputStream? = null
+    private var shouldCacheInMemory = true  // 是否在内存中缓存
 
     // 用于保存所有录制的PCM数据
     private val pcmBuffer = mutableListOf<ShortArray>()
@@ -40,8 +41,9 @@ class AudioRecorder(
     /**
      * 开始录制
      * @param savePcm 是否保存PCM文件到缓存
+     * @param cacheInMemory 是否在内存中缓存音频数据
      */
-    fun startRecording(savePcm: Boolean = true): Boolean {
+    fun startRecording(savePcm: Boolean = true, cacheInMemory: Boolean = true): Boolean {
         if (isRecording) {
             Log.w(TAG, "Already recording")
             return false
@@ -61,6 +63,9 @@ class AudioRecorder(
                 return false
             }
 
+            // 保存缓存设置
+            shouldCacheInMemory = cacheInMemory
+
             if (savePcm) {
                 // 创建PCM缓存文件
                 val timestamp = System.currentTimeMillis()
@@ -72,7 +77,7 @@ class AudioRecorder(
             pcmBuffer.clear()
             audioRecord?.startRecording()
             isRecording = true
-            Log.i(TAG, "Recording started")
+            Log.i(TAG, "Recording started (savePcm=$savePcm, cacheInMemory=$cacheInMemory)")
             return true
 
         } catch (e: Exception) {
@@ -94,11 +99,14 @@ class AudioRecorder(
         val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
 
         if (readSize > 0) {
-            // 保存到内存缓冲区
             val validBuffer = buffer.copyOf(readSize)
-            pcmBuffer.add(validBuffer)
 
-            // 写入PCM文件
+            // 只有在需要时才保存到内存缓冲区
+            if (shouldCacheInMemory) {
+                pcmBuffer.add(validBuffer)
+            }
+
+            // 写入PCM文件（如果需要）
             try {
                 pcmOutputStream?.let { stream ->
                     val byteBuffer = ByteArray(readSize * 2)
