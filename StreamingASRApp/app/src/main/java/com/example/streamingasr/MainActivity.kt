@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
 import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.Vad
+import com.k2fsa.sherpa.onnx.KeywordSpotter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -36,6 +37,15 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "StreamingASR"
         const val SAMPLE_RATE = 16000
+        private const val IDLE_TIMEOUT_MS = 5000L  // 5秒无语音自动休眠
+    }
+
+    /**
+     * 唤醒状态
+     */
+    enum class WakeState {
+        STANDBY,   // 待机：仅监听唤醒词
+        ACTIVE     // 激活：进行语音识别
     }
 
     // UI组件
@@ -50,11 +60,16 @@ class MainActivity : AppCompatActivity() {
     private var stream: OnlineStream? = null
     private var audioRecorder: AudioRecorder? = null
     private var vad: Vad? = null  // VAD 用于智能断句
+    private var keywordSpotter: KeywordSpotter? = null  // 唤醒词识别器
+    private var kwsStream: OnlineStream? = null
     private lateinit var modelManager: ModelManager
 
     // 状态
     private var isRecording = false
+    private var wakeState: WakeState = WakeState.STANDBY
     private var recognitionJob: Job? = null
+    private var kwsJob: Job? = null
+    private var lastSpeechTime: Long = 0L  // 最后检测到语音的时间
 
     // 权限请求
     private val requestPermissionLauncher = registerForActivityResult(
@@ -94,7 +109,12 @@ class MainActivity : AppCompatActivity() {
             if (isRecording) {
                 stopRecording()
             } else {
-                startRecording()
+                // 如果有KWS，从STANDBY开始；否则直接进入ACTIVE
+                if (keywordSpotter != null) {
+                    startWakeWordMonitoring()
+                } else {
+                    startRecording()
+                }
             }
         }
 
@@ -140,12 +160,21 @@ class MainActivity : AppCompatActivity() {
                     maxSpeechDuration = 10.0F      // 最长10秒一句
                 )
 
+                // 加载 KWS 模型（可选）
+                keywordSpotter = modelManager.createKeywordSpotter(
+                    keywordsFile = "keywords.txt",
+                    threshold = 0.25F,
+                    score = 1.5F
+                )
+
                 withContext(Dispatchers.Main) {
                     if (recognizer != null) {
                         val vadStatus = if (vad != null) "✓ VAD已启用 (智能断句)" else "✗ VAD未加载 (使用内置endpoint)"
-                        updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus")
+                        val kwsStatus = if (keywordSpotter != null) "✓ KWS已启用 (唤醒词检测)" else "✗ KWS未加载 (直接识别模式)"
+                        updateStatus("模型加载成功\n模型路径: ${modelManager.getModelDir().absolutePath}\n$vadStatus\n$kwsStatus")
                         Log.i(TAG, "Recognizer initialized successfully")
                         vad?.let { Log.i(TAG, "VAD initialized successfully") }
+                        keywordSpotter?.let { Log.i(TAG, "KeywordSpotter initialized successfully") }
                     } else {
                         val instructions = modelManager.getModelDownloadInstructions()
                         updateStatus("模型加载失败\n\n$instructions")
@@ -205,11 +234,145 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * 开始唤醒词监听（STANDBY 模式）
+     */
+    private fun startWakeWordMonitoring() {
+        if (keywordSpotter == null) {
+            Toast.makeText(this, "唤醒词识别器未初始化", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            // 创建音频缓存目录
+            val cacheDir = File(filesDir, "audio_cache")
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+
+            // 初始化音频录制器
+            audioRecorder = AudioRecorder(SAMPLE_RATE, cacheDir)
+
+            // 创建KWS流
+            kwsStream = keywordSpotter?.createStream()
+
+            // 开始录制（不保存PCM）
+            if (audioRecorder?.startRecording(savePcm = false) == true) {
+                isRecording = true
+                wakeState = WakeState.STANDBY
+                btnStartStop.text = "停止监听"
+                btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
+                updateStatus("⏸️ 待机中，等待唤醒词...")
+
+                // 启动KWS监听任务
+                startKwsTask()
+            } else {
+                Toast.makeText(this, "启动录音失败", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting wake word monitoring", e)
+            Toast.makeText(this, "启动失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * KWS监听任务
+     */
+    private fun startKwsTask() {
+        kwsJob = lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                while (isActive && isRecording && wakeState == WakeState.STANDBY) {
+                    // 读取音频数据
+                    val samples = audioRecorder?.readAudioData()
+
+                    if (samples != null && samples.isNotEmpty()) {
+                        // 送入KWS流
+                        kwsStream?.acceptWaveform(samples, SAMPLE_RATE)
+
+                        // 解码
+                        while (keywordSpotter?.isReady(kwsStream!!) == true) {
+                            keywordSpotter?.decode(kwsStream!!)
+                        }
+
+                        // 检查是否检测到唤醒词
+                        val result = keywordSpotter?.getResult(kwsStream!!)
+                        if (result != null && result.keyword.isNotEmpty()) {
+                            Log.i(TAG, "🎤 检测到唤醒词: ${result.keyword}")
+
+                            withContext(Dispatchers.Main) {
+                                onWakeWordDetected(result.keyword)
+                            }
+
+                            // 重置KWS流，准备下次唤醒
+                            keywordSpotter?.reset(kwsStream!!)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "KWS task error", e)
+                withContext(Dispatchers.Main) {
+                    updateStatus("KWS监听出错: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * 唤醒词检测到后的处理
+     */
+    private fun onWakeWordDetected(keyword: String) {
+        Log.i(TAG, "🔊 唤醒词触发: $keyword")
+        updateStatus("🔊 唤醒！检测到: \"$keyword\"\n正在启动识别...")
+
+        // 停止KWS任务
+        kwsJob?.cancel()
+        kwsStream?.release()
+        kwsStream = null
+
+        // 切换到ACTIVE模式
+        wakeState = WakeState.ACTIVE
+        btnStartStop.setBackgroundColor(getColor(android.R.color.holo_green_light))
+
+        // 启动ASR识别
+        startAsrRecognition()
+    }
+
+    /**
+     * 启动ASR识别（ACTIVE 模式）
+     */
+    private fun startAsrRecognition() {
+        try {
+            // 创建识别流
+            stream = recognizer?.createStream()
+            lastSpeechTime = System.currentTimeMillis()
+
+            updateStatus("🎙️ 正在识别...")
+            tvResult.text = ""
+
+            // 启动识别任务
+            startRecognitionTask()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting ASR recognition", e)
+            updateStatus("启动识别失败: ${e.message}")
+
+            // 识别启动失败，返回STANDBY模式
+            if (keywordSpotter != null) {
+                kwsStream = keywordSpotter?.createStream()
+                wakeState = WakeState.STANDBY
+                btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
+                updateStatus("⏸️ 待机中，等待唤醒词...")
+                startKwsTask()
+            }
+        }
+    }
+
+    /**
      * 停止录制和识别
      */
     private fun stopRecording() {
         isRecording = false
+        wakeState = WakeState.STANDBY
         recognitionJob?.cancel()
+        kwsJob?.cancel()
 
         // 停止音频录制
         audioRecorder?.stopRecording()
@@ -218,11 +381,20 @@ class MainActivity : AppCompatActivity() {
         stream?.release()
         stream = null
 
-        btnStartStop.text = "开始识别"
+        // 释放KWS流
+        kwsStream?.release()
+        kwsStream = null
+
+        btnStartStop.text = if (keywordSpotter != null) "开始监听" else "开始识别"
         btnStartStop.setBackgroundColor(getColor(android.R.color.holo_green_light))
 
         val pcmFile = audioRecorder?.getCurrentPcmFile()
-        updateStatus("录音已停止\nPCM文件: ${pcmFile?.absolutePath ?: "无"}")
+        val statusText = if (keywordSpotter != null) {
+            "已停止监听\nPCM文件: ${pcmFile?.absolutePath ?: "无"}"
+        } else {
+            "录音已停止\nPCM文件: ${pcmFile?.absolutePath ?: "无"}"
+        }
+        updateStatus(statusText)
     }
 
     /**
@@ -234,7 +406,7 @@ class MainActivity : AppCompatActivity() {
             val completedText = StringBuilder()  // 累积已完成的文本
 
             try {
-                while (isActive && isRecording) {
+                while (isActive && isRecording && wakeState == WakeState.ACTIVE) {
                     // 读取音频数据
                     val samples = audioRecorder?.readAudioData()
 
@@ -253,6 +425,11 @@ class MainActivity : AppCompatActivity() {
                         // 获取识别结果
                         val result = recognizer?.getResult(stream!!)
                         val currentText = result?.text ?: ""
+
+                        // 更新最后语音时间
+                        if (currentText.isNotEmpty()) {
+                            lastSpeechTime = System.currentTimeMillis()
+                        }
 
                         // 检测自我修正：比较新旧文本
                         if (lastText.isNotEmpty() && currentText.isNotEmpty() && currentText != lastText) {
@@ -316,6 +493,35 @@ class MainActivity : AppCompatActivity() {
                                 scrollToBottom()
                             }
                             lastText = currentText
+                        }
+
+                        // 🔄 自动休眠检测（仅在KWS模式下）
+                        if (keywordSpotter != null && completedText.isNotEmpty()) {
+                            val idleTime = System.currentTimeMillis() - lastSpeechTime
+                            if (idleTime > IDLE_TIMEOUT_MS) {
+                                Log.i(TAG, "💤 空闲超时 (${idleTime}ms)，返回待机模式")
+
+                                withContext(Dispatchers.Main) {
+                                    // 保存最终识别结果
+                                    tvResult.text = completedText.toString()
+
+                                    // 释放ASR流
+                                    stream?.release()
+                                    stream = null
+
+                                    // 切换回STANDBY模式
+                                    wakeState = WakeState.STANDBY
+                                    btnStartStop.setBackgroundColor(getColor(android.R.color.holo_orange_light))
+                                    updateStatus("💤 自动休眠，等待唤醒词...\n最后识别: ${completedText.toString().takeLast(30)}")
+
+                                    // 重新启动KWS监听
+                                    kwsStream = keywordSpotter?.createStream()
+                                    startKwsTask()
+                                }
+
+                                // 退出ASR循环
+                                return@launch
+                            }
                         }
                     }
                 }
@@ -393,5 +599,7 @@ class MainActivity : AppCompatActivity() {
         recognizer = null
         vad?.release()
         vad = null
+        keywordSpotter?.release()
+        keywordSpotter = null
     }
 }

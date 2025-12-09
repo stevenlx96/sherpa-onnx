@@ -554,6 +554,93 @@ class ModelManager(private val context: Context) {
     }
 
     /**
+     * 创建唤醒词识别器 (Keyword Spotter)
+     * @param keywordsFile 关键词文件名 (默认 keywords.txt)
+     * @param threshold 唤醒阈值 (默认 0.25)
+     * @param score 关键词分数 (默认 1.5)
+     * @param maxActivePaths 最大激活路径数 (默认 4)
+     * @param numThreads 线程数
+     * @return KeywordSpotter 或 null (如果模型不存在)
+     */
+    fun createKeywordSpotter(
+        keywordsFile: String = "keywords.txt",
+        threshold: Float = 0.25F,
+        score: Float = 1.5F,
+        maxActivePaths: Int = 4,
+        numThreads: Int = 1
+    ): KeywordSpotter? {
+        // 检查 KWS 模型文件（使用与ASR相同的transducer模型）
+        val encoderFile = File(modelDir, "encoder-epoch-99-avg-1.onnx")
+        val decoderFile = File(modelDir, "decoder-epoch-99-avg-1.onnx")
+        val joinerFile = File(modelDir, "joiner-epoch-99-avg-1.onnx")
+        val tokensFile = File(modelDir, "tokens.txt")
+        val kwFile = File(modelDir, keywordsFile)
+
+        if (!encoderFile.exists() || !decoderFile.exists() || !joinerFile.exists() || !tokensFile.exists()) {
+            Log.e(TAG, "KWS model files not found in ${modelDir.absolutePath}")
+            return null
+        }
+
+        if (!kwFile.exists()) {
+            Log.e(TAG, "Keywords file not found: ${kwFile.absolutePath}")
+            return null
+        }
+
+        Log.i(TAG, "Loading KWS model from: ${modelDir.absolutePath}")
+        Log.i(TAG, "Keywords file: ${kwFile.absolutePath}")
+        Log.i(TAG, "KWS config: threshold=$threshold, score=$score")
+
+        val modelConfig = OnlineModelConfig(
+            transducer = OnlineTransducerModelConfig(
+                encoder = encoderFile.absolutePath,
+                decoder = decoderFile.absolutePath,
+                joiner = joinerFile.absolutePath
+            ),
+            tokens = tokensFile.absolutePath,
+            numThreads = numThreads,
+            provider = "cpu",
+            debug = false,
+            modelType = "zipformer2"
+        )
+
+        val kwsConfig = KeywordSpotterConfig(
+            featConfig = FeatureConfig(
+                sampleRate = 16000,
+                featureDim = 80
+            ),
+            modelConfig = modelConfig,
+            maxActivePaths = maxActivePaths,
+            keywordsFile = kwFile.absolutePath,
+            keywordsScore = score,
+            keywordsThreshold = threshold,
+            numTrailingBlanks = 2
+        )
+
+        return try {
+            val kws = KeywordSpotter(assetManager = null, config = kwsConfig)
+            Log.i(TAG, "KeywordSpotter created successfully")
+            kws
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create KeywordSpotter", e)
+            null
+        }
+    }
+
+    /**
+     * 检查 KWS 模型和关键词文件是否存在
+     */
+    fun checkKwsExists(keywordsFile: String = "keywords.txt"): Boolean {
+        val encoderFile = File(modelDir, "encoder-epoch-99-avg-1.onnx")
+        val decoderFile = File(modelDir, "decoder-epoch-99-avg-1.onnx")
+        val joinerFile = File(modelDir, "joiner-epoch-99-avg-1.onnx")
+        val tokensFile = File(modelDir, "tokens.txt")
+        val kwFile = File(modelDir, keywordsFile)
+
+        return encoderFile.exists() && decoderFile.exists() &&
+               joinerFile.exists() && tokensFile.exists() && kwFile.exists()
+    }
+
+    /**
      * 支持的模型类型
      */
     enum class ModelType {
