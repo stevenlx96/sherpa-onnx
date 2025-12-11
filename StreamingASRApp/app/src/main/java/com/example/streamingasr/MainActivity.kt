@@ -361,7 +361,9 @@ class MainActivity : AppCompatActivity() {
                 if (recognizer == null) {
                     Log.i(TAG, "Creating OnlineRecognizer on wake...")
                     recognizer = modelManager.createOnlineRecognizer(
-                        modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+                        modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER,
+                        hotwordsFile = "hotwords.txt",      // 热词文件
+                        hotwordsScore = 1.5f                // 热词权重
                     )
                 }
 
