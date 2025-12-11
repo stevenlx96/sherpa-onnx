@@ -336,6 +336,9 @@ class ModelManager(private val context: Context) {
             "greedy_search"
         }
 
+        // 当使用热词时，增加 beam size 以提高热词命中率
+        val maxActivePaths = if (hotwordsPath.isNotEmpty()) 20 else 4
+
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
@@ -345,7 +348,7 @@ class ModelManager(private val context: Context) {
             hr = hrConfig,
             enableEndpoint = true,
             decodingMethod = decodingMethod,
-            maxActivePaths = 4,
+            maxActivePaths = maxActivePaths,
             hotwordsFile = hotwordsPath,
             hotwordsScore = hotwordsScore
         )
