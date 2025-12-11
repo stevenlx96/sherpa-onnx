@@ -294,6 +294,13 @@ class ModelManager(private val context: Context) {
             ""
         }
 
+        // 当使用热词时，必须使用 modified_beam_search
+        val decodingMethod = if (hotwordsPath.isNotEmpty()) {
+            "modified_beam_search"
+        } else {
+            "greedy_search"
+        }
+
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
@@ -302,7 +309,7 @@ class ModelManager(private val context: Context) {
             modelConfig = modelConfig,
             hr = hrConfig,
             enableEndpoint = true,
-            decodingMethod = "greedy_search",
+            decodingMethod = decodingMethod,
             maxActivePaths = 4,
             hotwordsFile = hotwordsPath,
             hotwordsScore = hotwordsScore
