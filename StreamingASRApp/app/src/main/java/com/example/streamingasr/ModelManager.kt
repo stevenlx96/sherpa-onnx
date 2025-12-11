@@ -291,42 +291,20 @@ class ModelManager(private val context: Context) {
                     var fileContent = file.readText()
 
                     // 检测并移除 UTF-8 BOM (EF BB BF = \uFEFF)
-                    var needRewrite = false
                     if (fileContent.startsWith("\uFEFF")) {
                         Log.i(TAG, "检测到 UTF-8 BOM，正在自动移除...")
                         fileContent = fileContent.substring(1)
-                        needRewrite = true
-                    }
 
-                    // 处理热词格式：为中文字符之间自动添加空格
-                    // sherpa-onnx 的 cjkchar 模式需要空格分隔的字符
-                    val lines = fileContent.lines().filter { it.isNotBlank() }
-                    val processedLines = lines.map { line ->
-                        // 检查是否已经有空格（避免重复处理）
-                        if (!line.contains(" ")) {
-                            // 在每个字符之间插入空格
-                            line.toCharArray().joinToString(" ")
-                        } else {
-                            line
-                        }
-                    }
-
-                    // 如果格式需要调整，写回文件
-                    if (processedLines != lines) {
-                        Log.i(TAG, "热词格式需要调整（添加字符间空格）...")
-                        needRewrite = true
-                    }
-
-                    if (needRewrite) {
+                        // 写回文件（无BOM版本）
                         try {
-                            file.writeText(processedLines.joinToString("\n"))
-                            Log.i(TAG, "已自动修正热词文件格式")
+                            file.writeText(fileContent)
+                            Log.i(TAG, "已自动清理热词文件中的 BOM")
                         } catch (e: Exception) {
-                            Log.w(TAG, "无法写入修正后的文件，但会继续使用修正后的内容", e)
+                            Log.w(TAG, "无法写入清理后的文件，但会继续使用清理后的内容", e)
                         }
                     }
 
-                    val hotwordsContent = processedLines
+                    val hotwordsContent = fileContent.lines().filter { it.isNotBlank() }
                     Log.i(TAG, "=== 热词文件加载成功 ===")
                     Log.i(TAG, "文件路径: ${file.absolutePath}")
                     Log.i(TAG, "文件大小: ${file.length()} bytes")
