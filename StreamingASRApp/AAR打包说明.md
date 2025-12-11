@@ -4,37 +4,69 @@
 
 ```
 StreamingASRApp/
-├── app/                          # ✅ 原始应用（未修改，可正常运行）
+├── app/                          # ✅ 原始应用（包含完整示例）
 │   └── ...
 ├── library/                      # 🆕 用于打包 AAR 的 module
 │   ├── src/
 │   │   └── main/
-│   │       ├── java/            # 源代码（从 app 复制，包含 ModelManager）
+│   │       ├── java/            # 源代码
+│   │       │   └── com/example/streamingasr/
+│   │       │       ├── SherpaOnnxASR.kt    # 🎯 公共 API 入口
+│   │       │       ├── ModelManager.kt     # 模型管理
+│   │       │       └── AudioRecorder.kt    # 音频录制
 │   │       ├── jniLibs/         # ⚠️ 需要你手动放置 .so 文件
 │   │       │   ├── arm64-v8a/
 │   │       │   └── armeabi-v7a/
-│   │       ├── res/             # 资源文件
 │   │       └── AndroidManifest.xml
 │   ├── build.gradle.kts         # Library 配置
-│   └── README.md                # Library 详细说明
+│   └── README.md                # 🔥 Library 详细 API 文档
 ├── build-library-aar.sh         # 🚀 一键构建脚本
+├── download-libs.sh             # 📥 下载 native 库脚本
 └── AAR打包说明.md               # 本文件
 ```
+
+## ✨ 核心特性
+
+此 AAR 提供完整的语音识别解决方案：
+
+- 🎤 **实时流式语音识别 (ASR)** - 支持中英文双语
+- 🔔 **唤醒词检测 (KWS)** - 小模型低功耗待机
+- 🎯 **语音活动检测 (VAD)** - 智能断句
+- 🔥 **热词支持 (Hotwords)** - 提高特定词识别准确度
+- 🧹 **自动缓存管理** - 防止存储空间耗尽
+- 📦 **音频录制和导出** - 完整的音频处理功能
 
 ## 🎯 关键特性：模型文件动态加载
 
 **重要：** 此 AAR **不打包**模型文件，而是在运行时从应用数据目录加载模型。
 
-### 模型加载路径
+### 模型加载路径（子目录结构）
 
-模型文件需要放在：
+模型文件需要按类型组织在子目录中：
 ```
 /data/data/<应用包名>/files/models/
+├── asr/        - ASR 语音识别模型
+├── kws/        - KWS 唤醒词检测模型（可选）
+└── vad/        - VAD 语音活动检测模型（可选）
 ```
 
 例如，如果你的应用包名是 `com.yourcompany.yourapp`，模型路径为：
 ```
 /data/data/com.yourcompany.yourapp/files/models/
+├── asr/
+│   ├── encoder-epoch-99-avg-1.onnx
+│   ├── decoder-epoch-99-avg-1.onnx
+│   ├── joiner-epoch-99-avg-1.onnx
+│   ├── tokens.txt
+│   └── hotwords.txt         # 可选：热词文件
+├── kws/
+│   ├── encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+│   ├── decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+│   ├── joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+│   ├── tokens.txt
+│   └── keywords.txt         # 唤醒词列表
+└── vad/
+    └── silero_vad.onnx
 ```
 
 ### 优点
@@ -48,7 +80,18 @@ StreamingASRApp/
 
 ### 第一步：准备 Native 库文件
 
-将你的 `.so` 文件复制到：
+#### 方法 A：使用下载脚本（推荐）
+
+```bash
+cd StreamingASRApp
+bash download-libs.sh
+```
+
+脚本会自动从 GitHub Releases 下载最新的预编译库并解压到 `app/src/main/jniLibs/`。
+
+#### 方法 B：手动复制
+
+如果已有 `.so` 文件，复制到以下目录：
 
 ```bash
 # arm64-v8a 架构
@@ -58,6 +101,13 @@ cp /path/to/libonnxruntime.so library/src/main/jniLibs/arm64-v8a/
 # armeabi-v7a 架构
 cp /path/to/libsherpa-onnx-jni.so library/src/main/jniLibs/armeabi-v7a/
 cp /path/to/libonnxruntime.so library/src/main/jniLibs/armeabi-v7a/
+```
+
+**注意：** 如果 `download-libs.sh` 下载到了 `app/src/main/jniLibs/`，需要同步复制到 `library/src/main/jniLibs/`：
+
+```bash
+# 复制 native 库到 library module
+cp -r app/src/main/jniLibs/* library/src/main/jniLibs/
 ```
 
 ### 第二步：构建 AAR
@@ -148,20 +198,62 @@ dependencies {
 
 #### 4. 准备模型文件
 
-**方法 A：使用 adb 推送模型**
+**方法 A：使用 adb 推送模型（推荐）**
 
 ```bash
-# 创建模型目录
-adb shell mkdir -p /data/data/com.yourcompany.yourapp/files/models
+# 推送 ASR 模型到临时目录
+adb push encoder-epoch-99-avg-1.onnx /data/local/tmp/
+adb push decoder-epoch-99-avg-1.onnx /data/local/tmp/
+adb push joiner-epoch-99-avg-1.onnx /data/local/tmp/
+adb push tokens.txt /data/local/tmp/
 
-# 推送模型文件
-adb push encoder-epoch-99-avg-1.onnx /data/data/com.yourcompany.yourapp/files/models/
-adb push decoder-epoch-99-avg-1.onnx /data/data/com.yourcompany.yourapp/files/models/
-adb push joiner-epoch-99-avg-1.onnx /data/data/com.yourcompany.yourapp/files/models/
-adb push tokens.txt /data/data/com.yourcompany.yourapp/files/models/
+# （可选）推送热词文件
+adb push hotwords.txt /data/local/tmp/
+
+# 使用 adb shell 移动到应用目录
+adb shell
+run-as com.yourcompany.yourapp
+mkdir -p files/models/asr
+cp /data/local/tmp/*.onnx files/models/asr/
+cp /data/local/tmp/tokens.txt files/models/asr/
+cp /data/local/tmp/hotwords.txt files/models/asr/  # 可选
+exit
 
 # 验证文件已推送
-adb shell ls -lh /data/data/com.yourcompany.yourapp/files/models/
+adb shell run-as com.yourcompany.yourapp ls -lh files/models/asr/
+```
+
+**推送 KWS 模型（可选）：**
+
+```bash
+# 推送 KWS 模型
+adb push encoder-kws.onnx /data/local/tmp/
+adb push decoder-kws.onnx /data/local/tmp/
+adb push joiner-kws.onnx /data/local/tmp/
+adb push tokens-kws.txt /data/local/tmp/
+adb push keywords.txt /data/local/tmp/
+
+adb shell
+run-as com.yourcompany.yourapp
+mkdir -p files/models/kws
+cp /data/local/tmp/encoder-kws.onnx files/models/kws/encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+cp /data/local/tmp/decoder-kws.onnx files/models/kws/decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+cp /data/local/tmp/joiner-kws.onnx files/models/kws/joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+cp /data/local/tmp/tokens-kws.txt files/models/kws/tokens.txt
+cp /data/local/tmp/keywords.txt files/models/kws/keywords.txt
+exit
+```
+
+**推送 VAD 模型（可选）：**
+
+```bash
+adb push silero_vad.onnx /data/local/tmp/
+
+adb shell
+run-as com.yourcompany.yourapp
+mkdir -p files/models/vad
+cp /data/local/tmp/silero_vad.onnx files/models/vad/
+exit
 ```
 
 **方法 B：在应用内下载模型**
@@ -211,52 +303,121 @@ class YourActivity : AppCompatActivity() {
 #### 5. 使用代码
 
 ```kotlin
-import com.example.streamingasr.ModelManager
-import com.example.streamingasr.AudioRecorder
+import com.example.streamingasr.SherpaOnnxASR
 
 class YourActivity : AppCompatActivity() {
-    private lateinit var modelManager: ModelManager
+    private lateinit var asr: SherpaOnnxASR
     private var recognizer: OnlineRecognizer? = null
+    private var recorder: AudioRecorder? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 创建 ModelManager
-        modelManager = ModelManager(this)
+        // 初始化 ASR 库
+        asr = SherpaOnnxASR(this)
 
-        // 方式一：自动检测模型（推荐）
-        recognizer = modelManager.createOnlineRecognizerAuto()
-
-        // 方式二：指定模型类型
-        // recognizer = modelManager.createOnlineRecognizer(
-        //     ModelManager.ModelType.ZIPFORMER_TRANSDUCER
-        // )
-
-        // 方式三：自定义模型文件名
-        // val modelFiles = ModelFiles(
-        //     encoder = "your-encoder.onnx",
-        //     decoder = "your-decoder.onnx",
-        //     joiner = "your-joiner.onnx",
-        //     tokens = "tokens.txt"
-        // )
-        // recognizer = modelManager.createOnlineRecognizer(modelFiles)
-
-        if (recognizer == null) {
-            // 模型加载失败，显示提示
+        // 检查模型是否存在
+        if (!asr.hasModels()) {
+            Log.e(TAG, "模型文件不存在！")
+            Log.i(TAG, asr.getModelDownloadInstructions())
             showModelInstructions()
-        } else {
-            // 开始使用语音识别
-            startRecognition()
+            return
+        }
+
+        // 创建识别器（支持热词）
+        recognizer = asr.createRecognizer(
+            hotwordsFile = "hotwords.txt",  // 可选：热词文件
+            hotwordsScore = 1.5f             // 可选：热词权重
+        )
+
+        // 创建音频录制器
+        recorder = asr.createAudioRecorder()
+
+        // 开始录制（自动清理缓存，默认保留500MB）
+        recorder?.startRecording(savePcm = true, cacheInMemory = true)
+
+        // 开始识别
+        startRecognition()
+    }
+
+    private fun startRecognition() {
+        val stream = recognizer?.createStream()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            while (isRecording) {
+                val samples = recorder?.readAudioData()
+                if (samples != null) {
+                    stream?.acceptWaveform(samples, SherpaOnnxASR.SAMPLE_RATE)
+
+                    while (recognizer?.isReady(stream) == true) {
+                        recognizer?.decode(stream)
+                    }
+
+                    val result = recognizer?.getResult(stream)
+                    withContext(Dispatchers.Main) {
+                        tvResult.text = result?.text
+                    }
+                }
+            }
         }
     }
 
     private fun showModelInstructions() {
-        val instructions = modelManager.getModelDownloadInstructions()
+        val instructions = asr.getModelDownloadInstructions()
         AlertDialog.Builder(this)
             .setTitle("需要模型文件")
             .setMessage(instructions)
             .setPositiveButton("确定", null)
             .show()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 清理资源
+        recorder?.stopRecording()
+        recognizer?.release()
+
+        // 可选：清理缓存
+        asr.cleanAudioCache(
+            maxCacheSizeBytes = 500 * 1024 * 1024,
+            keepRecentCount = 1
+        )
+    }
+}
+```
+
+**完整示例（包含 KWS + VAD）：**
+
+```kotlin
+class AdvancedActivity : AppCompatActivity() {
+    private lateinit var asr: SherpaOnnxASR
+    private var kws: KeywordSpotter? = null
+    private var vad: Vad? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        asr = SherpaOnnxASR(this)
+
+        // 创建 KWS 唤醒词识别器
+        kws = asr.createKeywordSpotter(
+            keywordsFile = "keywords.txt",
+            threshold = 0.5f
+        )
+
+        // 创建 VAD 语音活动检测
+        vad = asr.createVad(
+            threshold = 0.5f,
+            minSilenceDuration = 0.3f
+        )
+
+        // KWS 待机模式（不占用内存）
+        val recorder = asr.createAudioRecorder()
+        recorder.startRecording(savePcm = false, cacheInMemory = false)
+
+        // 检查音频缓存大小
+        val cacheSizeMB = asr.getAudioCacheSizeMB()
+        Log.i(TAG, "音频缓存: ${cacheSizeMB} MB")
     }
 }
 ```
@@ -269,22 +430,58 @@ class YourActivity : AppCompatActivity() {
 
 打包后的 AAR 包含：
 
-- ✅ 所有源代码（编译后的 .class 文件）
-  - `ModelManager` - 模型管理类（自动从数据目录加载模型）
-  - `AudioRecorder` - 音频录制类
-  - `MainActivity` - 示例界面（可选使用）
-- ✅ Native 库文件（libsherpa-onnx-jni.so, libonnxruntime.so）
-- ✅ 资源文件（layouts, values, drawables 等）
-- ✅ AndroidManifest.xml（包含权限声明）
-- ❌ **不包含**模型文件（需要运行时提供）
+### ✅ 源代码（编译后的 .class 文件）
 
-使用者**需要**：
-- ✅ 将模型文件放到 `/data/data/包名/files/models/` 目录
-- ✅ 使用 `ModelManager` 类加载模型
+- **`SherpaOnnxASR`** - 🎯 公共 API 入口类
+  - 模型管理（检查、加载、创建识别器）
+  - 音频录制器创建
+  - 缓存管理（获取大小、清理、清除）
+  - VAD/KWS 创建
+  - 热词支持
+- **`ModelManager`** - 内部模型管理类（从子目录加载模型）
+- **`AudioRecorder`** - 音频录制类（支持内存/磁盘缓存）
+- **`com.k2fsa.sherpa.onnx.*`** - sherpa-onnx 封装类
 
-使用者**不需要**：
-- ❌ 单独配置 .so 文件路径（已打包在 AAR 中）
-- ❌ 手动创建 OnlineRecognizer 配置（`ModelManager` 自动处理）
+### ✅ Native 库文件
+
+- `libsherpa-onnx-jni.so` - sherpa-onnx JNI 接口
+- `libonnxruntime.so` - ONNX Runtime
+
+### ✅ 配置文件
+
+- `AndroidManifest.xml` - Library manifest
+
+### ❌ 不包含
+
+- **模型文件** - 需要运行时从 `/data/data/包名/files/models/` 加载
+- **UI 界面** - 无 Activity，仅提供 API
+
+---
+
+## 📚 使用者需要做什么
+
+### ✅ 必需步骤：
+
+1. 将模型文件部署到子目录：
+   ```
+   /data/data/包名/files/models/
+   ├── asr/      - ASR 模型（必需）
+   ├── kws/      - KWS 模型（可选）
+   └── vad/      - VAD 模型（可选）
+   ```
+
+2. 使用 `SherpaOnnxASR` 类作为入口：
+   ```kotlin
+   val asr = SherpaOnnxASR(context)
+   val recognizer = asr.createRecognizer()
+   val recorder = asr.createAudioRecorder()
+   ```
+
+### ❌ 不需要做：
+
+- ❌ 配置 .so 文件路径（已打包在 AAR）
+- ❌ 手动创建 OnlineRecognizer 配置（`SherpaOnnxASR` 自动处理）
+- ❌ 手动管理音频缓存（自动清理，默认保留 500MB）
 
 ## 🎉 优点
 
@@ -295,90 +492,183 @@ class YourActivity : AppCompatActivity() {
 5. **支持多种模型**：Transducer、Paraformer、CTC 等
 6. **保持原项目完整**：原 app 目录未被修改，可以继续开发和测试
 
-## 📋 ModelManager 功能
+## 📋 SherpaOnnxASR API 文档
 
-`ModelManager` 类提供了强大的模型管理功能：
+`SherpaOnnxASR` 是 library 的公共 API 入口，提供完整的语音识别功能。
 
-### 1. 自动检测模型
+### 1. 模型管理
 
 ```kotlin
-val recognizer = modelManager.createOnlineRecognizerAuto()
+val asr = SherpaOnnxASR(context)
+
+// 检查模型是否存在
+asr.hasAsrModel()  // 检查 ASR 模型
+asr.hasKwsModel()  // 检查 KWS 模型
+asr.hasVadModel()  // 检查 VAD 模型
+asr.hasModels()    // 检查是否有任何模型
+
+// 获取模型目录
+val modelDir = asr.getModelDir()
+// 返回: /data/data/包名/files/models/
+
+// 列出模型文件
+val files = asr.listModelFiles()
+
+// 获取下载说明
+val instructions = asr.getModelDownloadInstructions()
 ```
 
-自动扫描模型目录，识别文件名模式并加载相应的模型。
-
-### 2. 指定模型类型
+### 2. 创建识别器
 
 ```kotlin
-val recognizer = modelManager.createOnlineRecognizer(
-    ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+// 方式一：默认配置（推荐）
+val recognizer = asr.createRecognizer()
+
+// 方式二：带热词支持
+val recognizer = asr.createRecognizer(
+    hotwordsFile = "hotwords.txt",  // 热词文件名（在 asr/ 目录）
+    hotwordsScore = 1.5f             // 热词权重（1.0-3.0）
 )
-```
 
-支持的模型类型：
-- `ZIPFORMER_TRANSDUCER` - Transducer 模型
-- `PARAFORMER` - Paraformer 模型
-- `ZIPFORMER_CTC` - CTC 模型
+// 方式三：自动检测模型类型
+val recognizer = asr.createRecognizerAuto()
 
-### 3. 自定义文件名
-
-```kotlin
+// 方式四：自定义模型文件
 val modelFiles = ModelFiles(
     encoder = "my-encoder.onnx",
     decoder = "my-decoder.onnx",
     joiner = "my-joiner.onnx",
     tokens = "my-tokens.txt"
 )
-val recognizer = modelManager.createOnlineRecognizer(modelFiles)
+val recognizer = asr.createRecognizerCustom(modelFiles)
 ```
 
-灵活指定模型文件名。
+支持的模型类型：
+- **ZIPFORMER_TRANSDUCER** - 流式 Transducer 模型（推荐）
+- **PARAFORMER** - Paraformer 模型
+- **ZIPFORMER_CTC** - CTC 模型
 
-### 4. 获取模型目录
+### 3. 创建 VAD（语音活动检测）
 
 ```kotlin
-val modelDir = modelManager.getModelDir()
-// 返回: /data/data/包名/files/models/
+val vad = asr.createVad(
+    threshold = 0.5f,           // 语音检测阈值 (0-1)
+    minSilenceDuration = 0.3f,  // 最短静音时长（秒）
+    minSpeechDuration = 0.25f,  // 最短语音时长（秒）
+    maxSpeechDuration = 10.0f   // 最大语音时长（秒）
+)
 ```
 
-### 5. 检查模型是否存在
+### 4. 创建 KWS（唤醒词识别器）
 
 ```kotlin
-val exists = modelManager.checkModelExists(ModelManager.ModelType.ZIPFORMER_TRANSDUCER)
+val kws = asr.createKeywordSpotter(
+    keywordsFile = "keywords.txt",  // 关键词文件（在 kws/ 目录）
+    threshold = 0.5f,               // 唤醒阈值
+    score = 1.0f,                   // 关键词分数
+    maxActivePaths = 4,             // 最大激活路径数
+    numThreads = 1                  // 线程数
+)
 ```
 
-### 6. 列出模型文件
+### 5. 音频录制
 
 ```kotlin
-val files = modelManager.listModelFiles()
-// 返回模型目录中的所有文件名
+// 创建录制器
+val recorder = asr.createAudioRecorder(
+    sampleRate = 16000,
+    cacheDir = File(context.filesDir, "audio_cache")
+)
+
+// 开始录制
+recorder.startRecording(
+    savePcm = true,         // 保存到磁盘
+    cacheInMemory = true    // 缓存到内存
+)
+
+// 读取音频数据（suspend 函数）
+lifecycleScope.launch(Dispatchers.IO) {
+    val samples = recorder.readAudioData()
+}
+
+// 停止录制
+recorder.stopRecording()
+
+// 获取当前 PCM 文件
+val pcmFile = recorder.getCurrentPcmFile()
 ```
 
-### 7. 获取下载说明
+### 6. 缓存管理（暴露的接口）
 
 ```kotlin
-val instructions = modelManager.getModelDownloadInstructions()
-// 返回详细的模型下载和使用说明
+// 获取缓存大小
+val cacheSizeBytes = asr.getAudioCacheSize()  // 字节
+val cacheSizeMB = asr.getAudioCacheSizeMB()    // MB
+
+// 清理旧缓存（保留最新文件）
+asr.cleanAudioCache(
+    maxCacheSizeBytes = 500 * 1024 * 1024,  // 最大 500MB
+    keepRecentCount = 1                      // 保留最新 1 个文件
+)
+
+// 清除所有磁盘缓存
+asr.clearAudioCache()
+
+// 清除内存缓存
+asr.clearMemoryCache()
+```
+
+### 7. 版本信息
+
+```kotlin
+val versionInfo = asr.getVersionInfo()
+// 返回库版本、功能列表、模型状态、缓存大小等信息
+Log.i(TAG, versionInfo)
+```
+
+输出示例：
+```
+Sherpa-ONNX ASR Library
+Version: 1.0.0
+
+Features:
+- Real-time Streaming ASR
+- Keyword Spotting (KWS)
+- Voice Activity Detection (VAD)
+- Automatic Cache Management
+- Audio Recording & Export
+
+Model Directory: /data/data/.../files/models
+ASR Model: ✓
+KWS Model: ✓
+VAD Model: ✓
+Audio Cache: 125 MB
 ```
 
 ## ⚠️ 注意事项
 
-### 1. 模型文件路径
+### 1. 模型文件路径（子目录结构）
 
-模型文件**必须**放在：
+模型文件**必须**按类型组织在子目录中：
 ```
 /data/data/<你的应用包名>/files/models/
+├── asr/        - ASR 语音识别模型
+├── kws/        - KWS 唤醒词检测模型（可选）
+└── vad/        - VAD 语音活动检测模型（可选）
 ```
 
-不能放在其他位置（如 SD 卡、外部存储等），因为 `ModelManager` 固定使用 `context.filesDir`。
+不能放在其他位置（如 SD 卡、外部存储等），因为使用 `context.filesDir`。
 
 ### 2. 文件名要求
+
+#### ASR 模型（asr/ 目录）
 
 **Transducer 模型**需要：
 - encoder-epoch-99-avg-1.onnx（或包含 "encoder" 的 .onnx 文件）
 - decoder-epoch-99-avg-1.onnx（或包含 "decoder" 的 .onnx 文件）
 - joiner-epoch-99-avg-1.onnx（或包含 "joiner" 的 .onnx 文件）
 - tokens.txt
+- hotwords.txt（可选）
 
 **Paraformer 模型**需要：
 - encoder.int8.onnx
@@ -389,7 +679,19 @@ val instructions = modelManager.getModelDownloadInstructions()
 - model.int8.onnx（或其他单个 .onnx 文件）
 - tokens.txt
 
-使用自动检测模式时，`ModelManager` 会根据文件名模式识别模型类型。
+#### KWS 模型（kws/ 目录，可选）
+
+- encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+- decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+- joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+- tokens.txt
+- keywords.txt（唤醒词列表，每行一个，UTF-8 无 BOM）
+
+#### VAD 模型（vad/ 目录，可选）
+
+- silero_vad.onnx
+
+**注意：** 使用自动检测模式时，会根据文件名模式识别模型类型。
 
 ### 3. 权限问题
 
@@ -402,11 +704,28 @@ val instructions = modelManager.getModelDownloadInstructions()
 建议在应用首次运行时检查模型是否存在，如果不存在则提示用户下载或从 assets 复制。
 
 ```kotlin
-if (!modelManager.checkModelExists(ModelManager.ModelType.ZIPFORMER_TRANSDUCER)) {
+val asr = SherpaOnnxASR(context)
+
+if (!asr.hasModels()) {
     // 显示提示或自动下载
+    Log.i(TAG, asr.getModelDownloadInstructions())
     showModelMissingDialog()
 }
 ```
+
+### 5. 缓存管理
+
+音频缓存会自动管理：
+- KWS 待机模式：`startRecording(savePcm=false, cacheInMemory=false)` - 不占用内存
+- ASR 识别模式：`startRecording(savePcm=true, cacheInMemory=true)` - 自动清理旧缓存
+- 默认保留最新 500MB，可通过 `cleanAudioCache()` 自定义
+
+### 6. 热词功能
+
+热词可以提高特定词识别准确度：
+- 全局热词文件：放在 `models/asr/hotwords.txt`
+- 使用方法：`createRecognizer(hotwordsFile="hotwords.txt", hotwordsScore=1.5f)`
+- 详细说明：参见 [HOTWORDS_USAGE.md](../HOTWORDS_USAGE.md)
 
 ## 🔧 自定义配置
 
@@ -446,24 +765,43 @@ A: 可以在应用中实现模型下载功能：
    ```
 
 **Q: 能否支持从 SD 卡加载模型？**
-A: 当前 `ModelManager` 固定使用 `context.filesDir`。如需支持外部存储，需要修改 `ModelManager` 代码。
+A: 当前固定使用 `context.filesDir`。如需支持外部存储，需要修改源码。
 
 **Q: AAR 大小大概多少？**
 A: 只包含 .so 文件的 AAR 约 10-50 MB（取决于架构数量）。
 
 **Q: 如何验证模型已正确加载？**
-A: 使用 `createOnlineRecognizer()` 返回值检查：
+A: 使用 `createRecognizer()` 返回值检查：
    ```kotlin
-   val recognizer = modelManager.createOnlineRecognizerAuto()
+   val asr = SherpaOnnxASR(context)
+   val recognizer = asr.createRecognizer()
    if (recognizer != null) {
        Log.i(TAG, "模型加载成功")
    } else {
        Log.e(TAG, "模型加载失败")
+       Log.i(TAG, asr.getModelDownloadInstructions())
    }
    ```
 
 **Q: 能否同时维护 App 和 Library？**
 A: 可以！`app/` 目录保持不变，继续开发；需要更新 AAR 时，将改动同步到 `library/` 并重新构建。
+
+**Q: 如何在有网络限制的环境中构建 AAR？**
+A:
+1. 在能访问网络的机器上运行 `bash download-libs.sh` 下载 native 库
+2. 将 `app/src/main/jniLibs/` 复制到 `library/src/main/jniLibs/`
+3. 在 Android Studio 中打开项目
+4. 选择 Build → Make Module 'StreamingASRApp.library'
+5. AAR 文件在 `library/build/outputs/aar/library-release.aar`
+
+**Q: 如何使用热词功能？**
+A: 参见 [HOTWORDS_USAGE.md](HOTWORDS_USAGE.md) 完整文档，简单使用：
+   ```kotlin
+   val recognizer = asr.createRecognizer(
+       hotwordsFile = "hotwords.txt",
+       hotwordsScore = 1.5f
+   )
+   ```
 
 ---
 
@@ -471,6 +809,8 @@ A: 可以！`app/` 目录保持不变，继续开发；需要更新 AAR 时，�
 
 ## 📚 相关文档
 
-- `library/README.md` - Library 详细说明
-- `app/src/main/java/com/example/streamingasr/ModelManager.kt` - 模型管理源码
-- 原项目 README - 应用使用说明
+- [library/README.md](library/README.md) - Library 完整 API 文档
+- [HOTWORDS_USAGE.md](HOTWORDS_USAGE.md) - 热词使用指南
+- [KWS_USAGE.md](KWS_USAGE.md) - 唤醒词使用指南
+- [VAD_USAGE.md](VAD_USAGE.md) - VAD 使用指南
+- [快速开始.md](快速开始.md) - 快速入门指南

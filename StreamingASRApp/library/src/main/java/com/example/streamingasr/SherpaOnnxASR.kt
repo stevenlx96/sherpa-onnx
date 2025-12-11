@@ -116,13 +116,17 @@ class SherpaOnnxASR(private val context: Context) {
      * 创建在线语音识别器 (ASR)
      * @param modelType 模型类型
      * @param numThreads 线程数（默认为 CPU 核心数）
+     * @param hotwordsFile 热词文件名（可选，放在 asr/ 目录）
+     * @param hotwordsScore 热词权重（1.0-3.0，推荐 1.5）
      * @return OnlineRecognizer 或 null
      */
     fun createRecognizer(
         modelType: ModelManager.ModelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER,
-        numThreads: Int = Runtime.getRuntime().availableProcessors()
+        numThreads: Int = Runtime.getRuntime().availableProcessors(),
+        hotwordsFile: String = "",
+        hotwordsScore: Float = 1.5f
     ): OnlineRecognizer? {
-        return modelManager.createOnlineRecognizer(modelType, numThreads)
+        return modelManager.createOnlineRecognizer(modelType, numThreads, hotwordsFile, hotwordsScore)
     }
 
     /**
