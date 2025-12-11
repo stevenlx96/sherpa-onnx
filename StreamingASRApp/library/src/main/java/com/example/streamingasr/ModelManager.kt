@@ -285,7 +285,24 @@ class ModelManager(private val context: Context) {
         val hotwordsPath = if (hotwordsFile.isNotEmpty()) {
             val file = File(asrDir, hotwordsFile)
             if (file.exists()) {
-                Log.i(TAG, "Hotwords enabled: ${file.absolutePath}, score=$hotwordsScore")
+                // 读取并打印热词内容，用于调试
+                try {
+                    val hotwordsContent = file.readLines()
+                    Log.i(TAG, "=== 热词文件加载成功 ===")
+                    Log.i(TAG, "文件路径: ${file.absolutePath}")
+                    Log.i(TAG, "文件大小: ${file.length()} bytes")
+                    Log.i(TAG, "热词数量: ${hotwordsContent.size}")
+                    Log.i(TAG, "热词权重: $hotwordsScore")
+                    Log.i(TAG, "热词内容:")
+                    hotwordsContent.forEachIndexed { index, line ->
+                        val bytes = line.toByteArray()
+                        val hex = bytes.joinToString(" ") { "%02X".format(it) }
+                        Log.i(TAG, "  [$index] '$line' (hex: $hex)")
+                    }
+                    Log.i(TAG, "======================")
+                } catch (e: Exception) {
+                    Log.e(TAG, "读取热词文件内容失败", e)
+                }
                 file.absolutePath
             } else {
                 Log.w(TAG, "Hotwords file not found: ${file.absolutePath}, will be ignored")
