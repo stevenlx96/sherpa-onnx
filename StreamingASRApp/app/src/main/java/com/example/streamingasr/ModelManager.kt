@@ -106,11 +106,15 @@ class ModelManager(private val context: Context) {
      * 创建在线识别器（使用预定义的模型类型）
      * @param modelType 模型类型
      * @param numThreads 线程数 (默认为CPU核心数)
+     * @param hotwordsFile 热词文件名 (可选，放在 asr/ 目录)
+     * @param hotwordsScore 热词权重 (默认 1.5，越高越优先)
      * @return OnlineRecognizer 或 null (如果模型不存在)
      */
     fun createOnlineRecognizer(
         modelType: ModelType = ModelType.ZIPFORMER_TRANSDUCER,
-        numThreads: Int = Runtime.getRuntime().availableProcessors()
+        numThreads: Int = Runtime.getRuntime().availableProcessors(),
+        hotwordsFile: String = "",
+        hotwordsScore: Float = 1.5f
     ): OnlineRecognizer? {
 
         if (!checkModelExists(modelType)) {
@@ -122,7 +126,7 @@ class ModelManager(private val context: Context) {
         Log.i(TAG, "Loading model from: ${modelDir.absolutePath}")
         Log.i(TAG, "Using $numThreads threads")
 
-        val config = createRecognizerConfig(modelType, numThreads)
+        val config = createRecognizerConfig(modelType, numThreads, hotwordsFile, hotwordsScore)
 
         return try {
             // assetManager设为null，从文件系统加载
@@ -230,7 +234,9 @@ class ModelManager(private val context: Context) {
      */
     private fun createRecognizerConfig(
         modelType: ModelType,
-        numThreads: Int
+        numThreads: Int,
+        hotwordsFile: String = "",
+        hotwordsScore: Float = 1.5f
     ): OnlineRecognizerConfig {
         val modelConfig = when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
@@ -274,6 +280,20 @@ class ModelManager(private val context: Context) {
         // 配置同音字替换器（如果文件存在）
         val hrConfig = createHomophoneReplacerConfig()
 
+        // 处理热词文件路径
+        val hotwordsPath = if (hotwordsFile.isNotEmpty()) {
+            val file = File(asrDir, hotwordsFile)
+            if (file.exists()) {
+                Log.i(TAG, "Hotwords enabled: ${file.absolutePath}, score=$hotwordsScore")
+                file.absolutePath
+            } else {
+                Log.w(TAG, "Hotwords file not found: ${file.absolutePath}, will be ignored")
+                ""
+            }
+        } else {
+            ""
+        }
+
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
@@ -283,7 +303,9 @@ class ModelManager(private val context: Context) {
             hr = hrConfig,
             enableEndpoint = true,
             decodingMethod = "greedy_search",
-            maxActivePaths = 4
+            maxActivePaths = 4,
+            hotwordsFile = hotwordsPath,
+            hotwordsScore = hotwordsScore
         )
     }
 
@@ -713,6 +735,15 @@ class ModelManager(private val context: Context) {
 
         return kwsEncoderFile.exists() && kwsDecoderFile.exists() &&
                kwsJoinerFile.exists() && kwsTokensFile.exists() && kwFile.exists()
+    }
+
+    /**
+     * 检查热词文件是否存在
+     * @param hotwordsFile 热词文件名（在 asr/ 目录下）
+     */
+    fun checkHotwordsExists(hotwordsFile: String = "hotwords.txt"): Boolean {
+        val file = File(asrDir, hotwordsFile)
+        return file.exists()
     }
 
     /**
