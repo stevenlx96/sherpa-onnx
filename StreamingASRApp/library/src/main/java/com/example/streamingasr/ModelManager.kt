@@ -249,7 +249,8 @@ class ModelManager(private val context: Context) {
                     tokens = File(asrDir, "tokens.txt").absolutePath,
                     numThreads = numThreads,
                     provider = "cpu",
-                    debug = false
+                    debug = false,
+                    modelingUnit = "cjkchar"  // 中文字符编码单元（热词所需）
                 )
             }
             ModelType.PARAFORMER -> {
