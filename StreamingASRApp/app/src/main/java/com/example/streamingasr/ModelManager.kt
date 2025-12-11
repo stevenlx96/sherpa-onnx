@@ -287,7 +287,24 @@ class ModelManager(private val context: Context) {
             if (file.exists()) {
                 // 读取并打印热词内容，用于调试
                 try {
-                    val hotwordsContent = file.readLines()
+                    // 读取文件内容并自动去除 UTF-8 BOM
+                    var fileContent = file.readText()
+
+                    // 检测并移除 UTF-8 BOM (EF BB BF = \uFEFF)
+                    if (fileContent.startsWith("\uFEFF")) {
+                        Log.i(TAG, "检测到 UTF-8 BOM，正在自动移除...")
+                        fileContent = fileContent.substring(1)
+
+                        // 写回文件（无BOM版本）
+                        try {
+                            file.writeText(fileContent)
+                            Log.i(TAG, "已自动清理热词文件中的 BOM")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "无法写入清理后的文件，但会继续使用清理后的内容", e)
+                        }
+                    }
+
+                    val hotwordsContent = fileContent.lines().filter { it.isNotBlank() }
                     Log.i(TAG, "=== 热词文件加载成功 ===")
                     Log.i(TAG, "文件路径: ${file.absolutePath}")
                     Log.i(TAG, "文件大小: ${file.length()} bytes")
