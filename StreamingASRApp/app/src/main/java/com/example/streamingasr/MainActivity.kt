@@ -363,7 +363,7 @@ class MainActivity : AppCompatActivity() {
                     recognizer = modelManager.createOnlineRecognizer(
                         modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER,
                         hotwordsFile = "hotwords.txt",      // 热词文件
-                        hotwordsScore = 2.5f                // 热词权重（提高到2.5以强制识别同音字）
+                        hotwordsScore = 10.0f               // 热词全局权重（极高值强制识别）
                     )
                 }
 
