@@ -178,7 +178,7 @@ class MainActivity : AppCompatActivity() {
                     // 加载 VAD（仅在直接识别模式）
                     vad = modelManager.createVad(
                         threshold = 0.5F,
-                        minSilenceDuration = 0.3F,
+                        minSilenceDuration = 1.0F,  // 延长静音时间，给热词更多修正机会
                         minSpeechDuration = 0.25F,
                         maxSpeechDuration = 10.0F
                     )
@@ -389,7 +389,7 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "Creating VAD on wake...")
                     vad = modelManager.createVad(
                         threshold = 0.5F,
-                        minSilenceDuration = 0.3F,
+                        minSilenceDuration = 1.0F,  // 延长静音时间，给热词更多修正机会
                         minSpeechDuration = 0.25F,
                         maxSpeechDuration = 10.0F
                     )
