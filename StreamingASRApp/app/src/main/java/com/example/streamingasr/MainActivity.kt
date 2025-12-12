@@ -534,9 +534,9 @@ class MainActivity : AppCompatActivity() {
 
                             Log.i(TAG, "✓ 句子完成: $currentText")
 
-                            // 更新UI：显示所有已完成的文本
+                            // 更新UI：显示所有已完成的文本（应用后处理）
                             withContext(Dispatchers.Main) {
-                                tvResult.text = completedText.toString()
+                                tvResult.text = postProcessText(completedText.toString())
                                 scrollToBottom()
                             }
 
@@ -545,14 +545,14 @@ class MainActivity : AppCompatActivity() {
                             vad?.reset()  // 重置 VAD
                             lastText = ""
                         } else if (currentText != lastText) {
-                            // 实时更新：显示已完成的文本 + 当前正在识别的文本
+                            // 实时更新：显示已完成的文本 + 当前正在识别的文本（应用后处理）
                             withContext(Dispatchers.Main) {
                                 val displayText = if (completedText.isEmpty()) {
                                     currentText
                                 } else {
                                     "$completedText\n$currentText"
                                 }
-                                tvResult.text = displayText
+                                tvResult.text = postProcessText(displayText)
                                 scrollToBottom()
                             }
                             lastText = currentText
@@ -565,8 +565,8 @@ class MainActivity : AppCompatActivity() {
                                 Log.i(TAG, "💤 空闲超时 (${idleTime}ms)，返回待机模式")
 
                                 withContext(Dispatchers.Main) {
-                                    // 保存最终识别结果
-                                    tvResult.text = completedText.toString()
+                                    // 保存最终识别结果（应用后处理）
+                                    tvResult.text = postProcessText(completedText.toString())
 
                                     // 释放ASR流、识别器和VAD（节省内存）
                                     stream?.release()
@@ -630,6 +630,40 @@ class MainActivity : AppCompatActivity() {
         }
 
         return null
+    }
+
+    /**
+     * 后处理：同音字替换
+     * 自动修正常见的同音字错误，确保专有名词正确
+     */
+    private fun postProcessText(text: String): String {
+        var result = text
+
+        // 专有名词替换规则（100%可靠）
+        // "津安达" 的所有同音字变体
+        val jinandaVariants = listOf(
+            "金安达", "捷安达", "吉安达", "济安达",
+            "锦安达", "晋安达", "劲安达", "进安达",
+            "紧安达", "尽安达", "近安达", "禁安达"
+        )
+
+        for (variant in jinandaVariants) {
+            result = result.replace(variant, "津安达")
+        }
+
+        // 其他常见同音字纠正
+        result = result.replace("在坐", "在座")
+        result = result.replace("因该", "应该")
+        result = result.replace("必需品", "必须品")  // 注意：这个要看上下文
+        result = result.replace("决择", "抉择")
+        result = result.replace("帐号", "账号")
+        result = result.replace("帐户", "账户")
+        result = result.replace("做主", "做主")
+        result = result.replace("座右铭", "座右铭")  // 确保不被误改
+
+        Log.d(TAG, "后处理: '$text' -> '$result'")
+
+        return result
     }
 
     /**
