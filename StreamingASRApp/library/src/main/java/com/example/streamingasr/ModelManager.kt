@@ -240,6 +240,22 @@ class ModelManager(private val context: Context) {
     ): OnlineRecognizerConfig {
         val modelConfig = when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
+                // 检查是否有 bpe.vocab 文件（双语模型需要）
+                val bpeVocabFile = File(asrDir, "bpe.vocab")
+                val bpeVocabPath = if (bpeVocabFile.exists()) {
+                    bpeVocabFile.absolutePath
+                } else {
+                    ""
+                }
+
+                // 双语模型使用 cjkchar+bpe，纯中文使用 cjkchar
+                val modelingUnit = if (bpeVocabPath.isNotEmpty()) "cjkchar+bpe" else "cjkchar"
+
+                Log.i(TAG, "Modeling unit: $modelingUnit")
+                if (bpeVocabPath.isNotEmpty()) {
+                    Log.i(TAG, "BPE vocab: $bpeVocabPath")
+                }
+
                 OnlineModelConfig(
                     transducer = OnlineTransducerModelConfig(
                         encoder = File(asrDir, "encoder-epoch-99-avg-1.onnx").absolutePath,
@@ -250,7 +266,8 @@ class ModelManager(private val context: Context) {
                     numThreads = numThreads,
                     provider = "cpu",
                     debug = false,
-                    modelingUnit = "cjkchar"  // 中文字符编码单元（热词所需）
+                    modelingUnit = modelingUnit,  // 双语模型: cjkchar+bpe, 纯中文: cjkchar
+                    bpeVocab = bpeVocabPath       // BPE词表路径（双语模型需要）
                 )
             }
             ModelType.PARAFORMER -> {
