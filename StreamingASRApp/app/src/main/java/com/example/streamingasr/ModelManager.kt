@@ -298,6 +298,9 @@ class ModelManager(private val context: Context) {
         // 配置同音字替换器（如果文件存在）
         val hrConfig = createHomophoneReplacerConfig()
 
+        // 配置语言模型（LM）用于 rescoring（如果文件存在）
+        val lmConfig = createLMConfig()
+
         // 处理热词文件路径
         val hotwordsPath = if (hotwordsFile.isNotEmpty()) {
             val file = File(asrDir, hotwordsFile)
@@ -362,6 +365,7 @@ class ModelManager(private val context: Context) {
                 featureDim = 80
             ),
             modelConfig = modelConfig,
+            lmConfig = lmConfig,  // 添加语言模型配置
             hr = hrConfig,
             enableEndpoint = true,
             decodingMethod = decodingMethod,
@@ -514,6 +518,26 @@ class ModelManager(private val context: Context) {
 
         // 否则使用默认配置
         return createHomophoneReplacerConfig()
+    }
+
+    /**
+     * 创建语言模型配置（用于 rescoring）
+     * 如果 LM 文件存在，则启用 rescoring 功能以提高识别准确率
+     */
+    private fun createLMConfig(): OnlineLMConfig {
+        val lmFile = File(asrDir, "with-state-epoch-99-avg-1.int8.onnx")
+
+        return if (lmFile.exists()) {
+            Log.i(TAG, "Language Model enabled: ${lmFile.absolutePath}")
+            Log.i(TAG, "Rescoring will improve accuracy for ambiguous words")
+            OnlineLMConfig(
+                model = lmFile.absolutePath,
+                scale = 0.5f  // LM 权重（0.5 是推荐值）
+            )
+        } else {
+            Log.d(TAG, "Language Model disabled: with-state-epoch-99-avg-1.int8.onnx not found")
+            OnlineLMConfig()  // 空配置，不启用 LM
+        }
     }
 
     /**
