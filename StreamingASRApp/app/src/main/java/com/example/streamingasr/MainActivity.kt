@@ -545,16 +545,21 @@ class MainActivity : AppCompatActivity() {
                             vad?.reset()  // 重置 VAD
                             lastText = ""
                         } else if (currentText != lastText) {
-                            // 实时更新：显示已完成的文本 + 当前正在识别的文本
-                            withContext(Dispatchers.Main) {
-                                val displayText = if (completedText.isEmpty()) {
-                                    currentText
-                                } else {
-                                    "$completedText\n$currentText"
+                            // 实时更新：只有文本长度>=3个字符时才显示（给热词更多上下文）
+                            val minCharsForDisplay = 3  // 至少3个字符才显示实时结果
+
+                            if (currentText.length >= minCharsForDisplay) {
+                                withContext(Dispatchers.Main) {
+                                    val displayText = if (completedText.isEmpty()) {
+                                        currentText
+                                    } else {
+                                        "$completedText\n$currentText"
+                                    }
+                                    tvResult.text = displayText
+                                    scrollToBottom()
                                 }
-                                tvResult.text = displayText
-                                scrollToBottom()
                             }
+                            // 注意：即使不显示，也要更新 lastText 用于修正检测
                             lastText = currentText
                         }
 
