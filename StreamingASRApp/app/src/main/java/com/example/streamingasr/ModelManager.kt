@@ -106,15 +106,11 @@ class ModelManager(private val context: Context) {
      * 创建在线识别器（使用预定义的模型类型）
      * @param modelType 模型类型
      * @param numThreads 线程数 (默认为CPU核心数)
-     * @param hotwordsFile 热词文件名 (可选，放在 asr/ 目录)
-     * @param hotwordsScore 热词权重 (默认 1.5，越高越优先)
      * @return OnlineRecognizer 或 null (如果模型不存在)
      */
     fun createOnlineRecognizer(
         modelType: ModelType = ModelType.ZIPFORMER_TRANSDUCER,
-        numThreads: Int = Runtime.getRuntime().availableProcessors(),
-        hotwordsFile: String = "",
-        hotwordsScore: Float = 1.5f
+        numThreads: Int = Runtime.getRuntime().availableProcessors()
     ): OnlineRecognizer? {
 
         if (!checkModelExists(modelType)) {
@@ -126,7 +122,7 @@ class ModelManager(private val context: Context) {
         Log.i(TAG, "Loading model from: ${modelDir.absolutePath}")
         Log.i(TAG, "Using $numThreads threads")
 
-        val config = createRecognizerConfig(modelType, numThreads, hotwordsFile, hotwordsScore)
+        val config = createRecognizerConfig(modelType, numThreads)
 
         return try {
             // assetManager设为null，从文件系统加载
@@ -234,9 +230,7 @@ class ModelManager(private val context: Context) {
      */
     private fun createRecognizerConfig(
         modelType: ModelType,
-        numThreads: Int,
-        hotwordsFile: String = "",
-        hotwordsScore: Float = 1.5f
+        numThreads: Int
     ): OnlineRecognizerConfig {
         val modelConfig = when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
@@ -298,80 +292,16 @@ class ModelManager(private val context: Context) {
         // 配置同音字替换器（如果文件存在）
         val hrConfig = createHomophoneReplacerConfig()
 
-        // 配置语言模型（LM）用于 rescoring（如果文件存在）
-        val lmConfig = createLMConfig()
-
-        // 处理热词文件路径
-        val hotwordsPath = if (hotwordsFile.isNotEmpty()) {
-            val file = File(asrDir, hotwordsFile)
-            if (file.exists()) {
-                // 读取并打印热词内容，用于调试
-                try {
-                    // 读取文件内容并自动去除 UTF-8 BOM
-                    var fileContent = file.readText()
-
-                    // 检测并移除 UTF-8 BOM (EF BB BF = \uFEFF)
-                    if (fileContent.startsWith("\uFEFF")) {
-                        Log.i(TAG, "检测到 UTF-8 BOM，正在自动移除...")
-                        fileContent = fileContent.substring(1)
-
-                        // 写回文件（无BOM版本）
-                        try {
-                            file.writeText(fileContent)
-                            Log.i(TAG, "已自动清理热词文件中的 BOM")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "无法写入清理后的文件，但会继续使用清理后的内容", e)
-                        }
-                    }
-
-                    val hotwordsContent = fileContent.lines().filter { it.isNotBlank() }
-                    Log.i(TAG, "=== 热词文件加载成功 ===")
-                    Log.i(TAG, "文件路径: ${file.absolutePath}")
-                    Log.i(TAG, "文件大小: ${file.length()} bytes")
-                    Log.i(TAG, "热词数量: ${hotwordsContent.size}")
-                    Log.i(TAG, "热词权重: $hotwordsScore")
-                    Log.i(TAG, "热词内容:")
-                    hotwordsContent.forEachIndexed { index, line ->
-                        val bytes = line.toByteArray()
-                        val hex = bytes.joinToString(" ") { "%02X".format(it) }
-                        Log.i(TAG, "  [$index] '$line' (hex: $hex)")
-                    }
-                    Log.i(TAG, "======================")
-                } catch (e: Exception) {
-                    Log.e(TAG, "读取热词文件内容失败", e)
-                }
-                file.absolutePath
-            } else {
-                Log.w(TAG, "Hotwords file not found: ${file.absolutePath}, will be ignored")
-                ""
-            }
-        } else {
-            ""
-        }
-
-        // 当使用热词时，必须使用 modified_beam_search
-        val decodingMethod = if (hotwordsPath.isNotEmpty()) {
-            "modified_beam_search"
-        } else {
-            "greedy_search"
-        }
-
-        // 当使用热词时，增加 beam size 以提高热词命中率
-        val maxActivePaths = if (hotwordsPath.isNotEmpty()) 20 else 4
-
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
                 featureDim = 80
             ),
             modelConfig = modelConfig,
-            lmConfig = lmConfig,  // 添加语言模型配置
             hr = hrConfig,
             enableEndpoint = true,
-            decodingMethod = decodingMethod,
-            maxActivePaths = maxActivePaths,
-            hotwordsFile = hotwordsPath,
-            hotwordsScore = hotwordsScore
+            decodingMethod = "greedy_search",
+            maxActivePaths = 4
         )
     }
 
@@ -518,26 +448,6 @@ class ModelManager(private val context: Context) {
 
         // 否则使用默认配置
         return createHomophoneReplacerConfig()
-    }
-
-    /**
-     * 创建语言模型配置（用于 rescoring）
-     * 如果 LM 文件存在，则启用 rescoring 功能以提高识别准确率
-     */
-    private fun createLMConfig(): OnlineLMConfig {
-        val lmFile = File(asrDir, "with-state-epoch-99-avg-1.int8.onnx")
-
-        return if (lmFile.exists()) {
-            Log.i(TAG, "Language Model enabled: ${lmFile.absolutePath}")
-            Log.i(TAG, "Rescoring will improve accuracy for ambiguous words")
-            OnlineLMConfig(
-                model = lmFile.absolutePath,
-                scale = 0.5f  // LM 权重（0.5 是推荐值）
-            )
-        } else {
-            Log.d(TAG, "Language Model disabled: with-state-epoch-99-avg-1.int8.onnx not found")
-            OnlineLMConfig()  // 空配置，不启用 LM
-        }
     }
 
     /**
@@ -821,15 +731,6 @@ class ModelManager(private val context: Context) {
 
         return kwsEncoderFile.exists() && kwsDecoderFile.exists() &&
                kwsJoinerFile.exists() && kwsTokensFile.exists() && kwFile.exists()
-    }
-
-    /**
-     * 检查热词文件是否存在
-     * @param hotwordsFile 热词文件名（在 asr/ 目录下）
-     */
-    fun checkHotwordsExists(hotwordsFile: String = "hotwords.txt"): Boolean {
-        val file = File(asrDir, hotwordsFile)
-        return file.exists()
     }
 
     /**
