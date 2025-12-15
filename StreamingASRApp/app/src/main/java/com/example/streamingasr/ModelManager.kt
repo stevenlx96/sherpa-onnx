@@ -79,7 +79,7 @@ class ModelManager(private val context: Context) {
     /**
      * 检查模型是否存在
      */
-    private fun checkModelExists(modelType: ModelType): Boolean {
+    fun checkModelExists(modelType: ModelType): Boolean {
         return when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
                 val encoder = File(asrDir, "encoder-epoch-99-avg-1.onnx")
@@ -138,6 +138,92 @@ class ModelManager(private val context: Context) {
         }
     }
 
+    /**
+     * 创建在线识别器（使用自定义模型文件名）
+     * @param modelFiles 自定义的模型文件配置
+     * @param numThreads 线程数 (默认为CPU核心数)
+     * @return OnlineRecognizer 或 null (如果模型不存在)
+     */
+    fun createOnlineRecognizer(
+        modelFiles: ModelFiles,
+        numThreads: Int = Runtime.getRuntime().availableProcessors()
+    ): OnlineRecognizer? {
+
+        Log.i(TAG, "Loading custom model from: ${modelDir.absolutePath}")
+        Log.i(TAG, "Using $numThreads threads")
+
+        val config = try {
+            createRecognizerConfig(modelFiles, numThreads)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create recognizer config: ${e.message}")
+            return null
+        }
+
+        return try {
+            val recognizer = OnlineRecognizer(
+                assetManager = null,
+                config = config
+            )
+            Log.i(TAG, "OnlineRecognizer created successfully with custom model files")
+            recognizer
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create OnlineRecognizer", e)
+            null
+        }
+    }
+
+    /**
+     * 自动查找并创建在线识别器
+     * 自动扫描模型目录，匹配文件名模式
+     * @param numThreads 线程数 (默认为CPU核心数)
+     * @return OnlineRecognizer 或 null (如果未找到匹配的模型)
+     */
+    fun createOnlineRecognizerAuto(
+        numThreads: Int = Runtime.getRuntime().availableProcessors()
+    ): OnlineRecognizer? {
+        Log.i(TAG, "Auto-detecting model files in: ${asrDir.absolutePath}")
+
+        val files = asrDir.listFiles() ?: run {
+            Log.e(TAG, "ASR directory is empty or inaccessible")
+            return null
+        }
+
+        val fileNames = files.map { it.name }
+        Log.i(TAG, "Found files: ${fileNames.joinToString(", ")}")
+
+        // 尝试查找 Transducer 模型
+        val encoder = fileNames.find { it.contains("encoder") && it.endsWith(".onnx") }
+        val decoder = fileNames.find { it.contains("decoder") && it.endsWith(".onnx") }
+        val joiner = fileNames.find { it.contains("joiner") && it.endsWith(".onnx") }
+
+        if (encoder != null && decoder != null && joiner != null) {
+            Log.i(TAG, "Detected Transducer model: encoder=$encoder, decoder=$decoder, joiner=$joiner")
+            val modelFiles = ModelFiles(
+                encoder = encoder,
+                decoder = decoder,
+                joiner = joiner,
+                tokens = "tokens.txt"
+            )
+            return createOnlineRecognizer(modelFiles, numThreads)
+        }
+
+        // 尝试查找 Paraformer 或 CTC 模型
+        val model = fileNames.find {
+            it.endsWith(".onnx") && !it.contains("encoder") && !it.contains("decoder") && !it.contains("joiner")
+        }
+
+        if (model != null) {
+            Log.i(TAG, "Detected Paraformer/CTC model: $model")
+            val modelFiles = ModelFiles(
+                model = model,
+                tokens = "tokens.txt"
+            )
+            return createOnlineRecognizer(modelFiles, numThreads)
+        }
+
+        Log.e(TAG, "No compatible model files found")
+        return null
+    }
 
     /**
      * 创建识别器配置
@@ -219,6 +305,100 @@ class ModelManager(private val context: Context) {
         )
     }
 
+    /**
+     * 创建识别器配置（使用自定义模型文件）
+     */
+    private fun createRecognizerConfig(
+        modelFiles: ModelFiles,
+        numThreads: Int
+    ): OnlineRecognizerConfig {
+        // 确定模型类型并构建配置
+        val modelConfig = when {
+            // Transducer 模型（encoder + decoder + joiner）
+            modelFiles.encoder != null && modelFiles.decoder != null && modelFiles.joiner != null -> {
+                val encoderFile = File(asrDir, modelFiles.encoder)
+                val decoderFile = File(asrDir, modelFiles.decoder)
+                val joinerFile = File(asrDir, modelFiles.joiner)
+                val tokensFile = File(asrDir, modelFiles.tokens)
+
+                require(encoderFile.exists()) { "Encoder file not found: ${encoderFile.absolutePath}" }
+                require(decoderFile.exists()) { "Decoder file not found: ${decoderFile.absolutePath}" }
+                require(joinerFile.exists()) { "Joiner file not found: ${joinerFile.absolutePath}" }
+                require(tokensFile.exists()) { "Tokens file not found: ${tokensFile.absolutePath}" }
+
+                Log.i(TAG, "Using Transducer model:")
+                Log.i(TAG, "  encoder: ${modelFiles.encoder}")
+                Log.i(TAG, "  decoder: ${modelFiles.decoder}")
+                Log.i(TAG, "  joiner: ${modelFiles.joiner}")
+
+                OnlineModelConfig(
+                    transducer = OnlineTransducerModelConfig(
+                        encoder = encoderFile.absolutePath,
+                        decoder = decoderFile.absolutePath,
+                        joiner = joinerFile.absolutePath
+                    ),
+                    tokens = tokensFile.absolutePath,
+                    numThreads = numThreads,
+                    provider = "cpu",
+                    debug = false
+                )
+            }
+
+            // Paraformer/CTC 单文件模型
+            modelFiles.model != null -> {
+                val modelFile = File(asrDir, modelFiles.model)
+                val tokensFile = File(asrDir, modelFiles.tokens)
+
+                require(modelFile.exists()) { "Model file not found: ${modelFile.absolutePath}" }
+                require(tokensFile.exists()) { "Tokens file not found: ${tokensFile.absolutePath}" }
+
+                Log.i(TAG, "Using single model file: ${modelFiles.model}")
+
+                // 根据文件名判断是 Paraformer 还是 CTC
+                if (modelFiles.model.contains("paraformer", ignoreCase = true)) {
+                    OnlineModelConfig(
+                        paraformer = OnlineParaformerModelConfig(
+                            encoder = modelFile.absolutePath,
+                            decoder = modelFile.absolutePath
+                        ),
+                        tokens = tokensFile.absolutePath,
+                        numThreads = numThreads,
+                        provider = "cpu",
+                        debug = false
+                    )
+                } else {
+                    OnlineModelConfig(
+                        zipformer2Ctc = OnlineZipformer2CtcModelConfig(
+                            model = modelFile.absolutePath
+                        ),
+                        tokens = tokensFile.absolutePath,
+                        numThreads = numThreads,
+                        provider = "cpu",
+                        debug = false
+                    )
+                }
+            }
+
+            else -> {
+                throw IllegalArgumentException("Invalid model configuration: must provide either (encoder, decoder, joiner) or (model)")
+            }
+        }
+
+        // 配置同音字替换器
+        val hrConfig = createHomophoneReplacerConfig(modelFiles)
+
+        return OnlineRecognizerConfig(
+            featConfig = FeatureConfig(
+                sampleRate = 16000,
+                featureDim = 80
+            ),
+            modelConfig = modelConfig,
+            hr = hrConfig,
+            enableEndpoint = true,
+            decodingMethod = "greedy_search",
+            maxActivePaths = 4
+        )
+    }
 
     /**
      * 创建同音字替换器配置（使用默认文件名）
@@ -245,38 +425,157 @@ class ModelManager(private val context: Context) {
         }
     }
 
+    /**
+     * 创建同音字替换器配置（使用自定义文件名）
+     */
+    private fun createHomophoneReplacerConfig(modelFiles: ModelFiles): HomophoneReplacerConfig {
+        // 如果ModelFiles中指定了自定义的lexicon和replaceFst
+        if (modelFiles.lexicon != null && modelFiles.replaceFst != null) {
+            val lexiconFile = File(asrDir, modelFiles.lexicon)
+            val replaceFstFile = File(asrDir, modelFiles.replaceFst)
+
+            return if (lexiconFile.exists() && replaceFstFile.exists()) {
+                Log.i(TAG, "HomophoneReplacer enabled (custom): lexicon=${lexiconFile.absolutePath}, fst=${replaceFstFile.absolutePath}")
+                HomophoneReplacerConfig(
+                    lexicon = lexiconFile.absolutePath,
+                    ruleFsts = replaceFstFile.absolutePath
+                )
+            } else {
+                Log.w(TAG, "Custom HomophoneReplacer files specified but not found")
+                HomophoneReplacerConfig()
+            }
+        }
+
+        // 否则使用默认配置
+        return createHomophoneReplacerConfig()
+    }
 
     /**
      * 获取模型下载说明
      */
     fun getModelDownloadInstructions(): String {
         return """
-            ❌ 模型文件未找到
+            模型文件需要按以下目录结构放置:
+            ${modelDir.absolutePath}/
+            ├── asr/        - ASR 语音识别模型
+            ├── kws/        - KWS 唤醒词检测模型
+            └── vad/        - VAD 语音活动检测模型
 
-            模型目录: ${modelDir.absolutePath}/
+            ========================================
+            必需文件1: ASR 模型 (语音识别)
+            ========================================
 
-            📥 下载模型文件并推送到设备：
-
-            必需文件 (ASR):
-            - encoder-epoch-99-avg-1.onnx
-            - decoder-epoch-99-avg-1.onnx
-            - joiner-epoch-99-avg-1.onnx
-            - tokens.txt
             放置位置: ${asrDir.absolutePath}/
 
-            可选文件 (KWS): keywords.txt + 模型文件
+            1. Zipformer Transducer (推荐 - 中英文双语):
+               需要的文件:
+               - encoder-epoch-99-avg-1.onnx
+               - decoder-epoch-99-avg-1.onnx
+               - joiner-epoch-99-avg-1.onnx
+               - tokens.txt
+
+               下载地址:
+               https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2
+
+            2. Paraformer (中文+英文):
+               需要的文件:
+               - encoder.int8.onnx
+               - decoder.int8.onnx
+               - tokens.txt
+
+               下载地址:
+               https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2
+
+            3. Zipformer CTC:
+               需要的文件:
+               - model.int8.onnx
+               - tokens.txt
+
+            ========================================
+            可选: KWS 模型 (唤醒词检测)
+            ========================================
+
             放置位置: ${kwsDir.absolutePath}/
 
-            可选文件 (VAD): silero_vad.onnx
+            需要的文件:
+            - encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+            - decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+            - joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+            - tokens.txt
+            - keywords.txt (唤醒词列表)
+
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+
+            功能说明:
+            - 提供"你好小智"等唤醒词检测功能
+            - 模型小 (3.3MB)，功耗低
+            - 如果不存在 keywords.txt，应用将以直接识别模式启动
+
+            ========================================
+            推荐: Silero VAD (优化断句)
+            ========================================
+
             放置位置: ${vadDir.absolutePath}/
 
-            可选文件 (同音字): lexicon.txt + replace.fst
+            文件名: silero_vad.onnx
+
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
+
+            功能说明:
+            - 智能语音活动检测，比内置endpoint更准确
+            - 0.3秒静音即可断句（比内置快5倍）
+            - 抗噪音能力强，避免误断句
+            - 如果不存在，将使用内置的endpoint断句
+
+            ========================================
+            可选: 同音字替换功能 (HomophoneReplacer)
+            ========================================
+
             放置位置: ${asrDir.absolutePath}/
 
-            详细说明请查看 README.md
+            需要的文件:
+            - lexicon.txt (词典文件)
+            - replace.fst (替换规则FST)
+
+            下载地址:
+            https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
+
+            功能说明:
+            自动纠正同音字错误，如 "在坐" → "在座", "因该" → "应该"
+            这些文件是可选的，如果不存在则不启用同音字替换功能
+
+            ========================================
+            使用adb推送模型示例:
+            ========================================
+
+            # 推送 ASR 模型
+            adb push encoder-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push decoder-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push joiner-epoch-99-avg-1.onnx ${asrDir.absolutePath}/
+            adb push tokens.txt ${asrDir.absolutePath}/
+
+            # 推送 KWS 模型 (可选)
+            adb push encoder-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push decoder-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push joiner-epoch-12-avg-2-chunk-16-left-64.onnx ${kwsDir.absolutePath}/
+            adb push tokens.txt ${kwsDir.absolutePath}/
+            adb push keywords.txt ${kwsDir.absolutePath}/
+
+            # 推送 VAD 模型 (推荐)
+            adb push silero_vad.onnx ${vadDir.absolutePath}/
+
+            或者使用应用的文件管理功能将模型复制到对应目录
         """.trimIndent()
     }
 
+    /**
+     * 列出模型目录中的所有文件
+     */
+    fun listModelFiles(): List<String> {
+        return modelDir.listFiles()?.map { it.name } ?: emptyList()
+    }
 
     /**
      * 创建 Silero VAD
@@ -327,6 +626,13 @@ class ModelManager(private val context: Context) {
         }
     }
 
+    /**
+     * 检查 VAD 模型是否存在
+     */
+    fun checkVadExists(): Boolean {
+        val vadModelFile = File(vadDir, "silero_vad.onnx")
+        return vadModelFile.exists()
+    }
 
     /**
      * 创建唤醒词识别器 (Keyword Spotter)
