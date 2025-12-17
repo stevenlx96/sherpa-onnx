@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">StreamingASR Demo</string>
-    <string name="status_initializing">初始化中...</string>
-    <string name="start_recognition">开始识别</string>
-    <string name="stop_recognition">停止识别</string>
-    <string name="clear_cache">清除缓存</string>
-    <string name="recognition_hint">识别结果将显示在这里...</string>
-</resources>
