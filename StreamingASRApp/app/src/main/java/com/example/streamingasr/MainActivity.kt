@@ -503,25 +503,31 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
 
-                        // 🎯 断句逻辑（三种方式，优先级递减）
-                        val hasSentenceEnd = currentText.contains(Regex("[。！？.!?]"))
-                        // VAD 内部会累积静音时长，当静音超过 minSilenceDuration (1.0s) 时，isSpeechDetected() 返回 false
-                        // 这表示 VAD 检测到句子已完成
-                        val vadSentenceComplete = vad?.isSpeechDetected() == false
-                        val isEndpoint = recognizer?.isEndpoint(stream!!) == true  // 内置 endpoint
+                        // 🎯 VAD 真正的断句逻辑
+                        // VAD 内部维护一个语音段队列，当检测到完整的语音段时会放入队列
+                        // minSilenceDuration (1.0s) 控制多长时间的静音算作语音段结束
+                        // minSpeechDuration (0.25s) 控制最短的有效语音段长度
+                        var vadSentenceComplete = false
+                        if (vad != null && vad?.empty() == false) {
+                            // VAD 检测到了一个完整的语音段
+                            val segment = vad?.front()  // 获取语音段
+                            vad?.pop()  // 从队列中移除
+
+                            Log.d(TAG, "断句触发: VAD 检测到完整语音段 (start=${segment?.start}, samples=${segment?.samples?.size})")
+                            vadSentenceComplete = true
+                        }
+
+                        // 备用断句：ASR 内置 endpoint
+                        val isEndpoint = recognizer?.isEndpoint(stream!!) == true
 
                         // 组合断句策略
                         val shouldBreak = when {
-                            hasSentenceEnd -> {
-                                Log.d(TAG, "断句触发: 标点符号")
-                                true
-                            }
                             vadSentenceComplete && currentText.isNotEmpty() -> {
-                                Log.d(TAG, "断句触发: VAD 静音检测 (minSilenceDuration=1.0s)")
+                                Log.d(TAG, "断句触发: VAD 语音段完成")
                                 true
                             }
-                            isEndpoint -> {
-                                Log.d(TAG, "断句触发: 内置 endpoint")
+                            isEndpoint && currentText.isNotEmpty() -> {
+                                Log.d(TAG, "断句触发: ASR 内置 endpoint")
                                 true
                             }
                             else -> false
