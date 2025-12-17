@@ -1,6 +1,8 @@
-# AAR 测试 Demo
+# AAR 独立测试 Demo
 
-这是一个简单的 Demo 应用，用于测试 `SherpaAsrManager` AAR 的功能。
+这是一个**完全独立**的 Demo 应用，用于测试 `SherpaAsrManager` AAR 的功能。
+
+**重要：** demo 模块通过 AAR 文件使用功能，**不依赖** library 源码模块。这是真正测试 AAR 的方式！
 
 ## 功能测试
 
@@ -15,6 +17,19 @@
 - ✅ **错误处理** - 完整的错误回调
 
 ## 使用步骤
+
+### 0. 准备 AAR 文件（首次或更新后）
+
+```bash
+# 步骤 1：编译 library 生成 AAR
+./gradlew :library:assembleRelease
+
+# 步骤 2：复制 AAR 到 demo/libs/（使用脚本）
+./copy-aar-to-demo.sh
+
+# 或手动复制：
+# cp library/build/outputs/aar/library-release.aar demo/libs/
+```
 
 ### 1. 部署模型文件
 
@@ -162,33 +177,56 @@ demo/
 
 ## 依赖说明
 
-Demo 依赖 library 模块：
+**Demo 完全独立使用 AAR 文件：**
 
 ```kotlin
 dependencies {
-    // 依赖 library module（开发测试）
-    implementation(project(":library"))
+    // ✅ 使用 AAR 文件（独立测试）
+    implementation(files("libs/library-release.aar"))
 
     // 必需的外部依赖
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
 ```
 
-## 切换到 AAR 测试
+**这是真正测试 AAR 的方式！** demo 不依赖 library 源码，完全通过 AAR 使用功能。
 
-要测试真正的 AAR 文件，修改 `build.gradle.kts`：
+## 工作原理
 
-```kotlin
-dependencies {
-    // 注释掉 library 模块
-    // implementation(project(":library"))
-
-    // 改用 AAR 文件
-    implementation(files("libs/library-release.aar"))
-}
+```
+StreamingASRApp/
+  ├── library/                       # 源码模块
+  │   └── build/outputs/aar/
+  │       └── library-release.aar   # 编译生成的 AAR
+  │
+  └── demo/                          # 独立测试项目
+      ├── libs/
+      │   └── library-release.aar   # 从 library 复制过来
+      └── build.gradle.kts           # 依赖 AAR 文件
 ```
 
+每次修改 library 代码后：
+1. 重新编译 AAR：`./gradlew :library:assembleRelease`
+2. 复制到 demo：`./copy-aar-to-demo.sh`
+3. 编译 demo 测试：`./gradlew :demo:assembleDebug`
+
 ## 故障排查
+
+### AAR 文件不存在
+
+**错误：** 编译 demo 时提示找不到 AAR 文件
+
+**解决：**
+```bash
+# 1. 编译 library 生成 AAR
+./gradlew :library:assembleRelease
+
+# 2. 复制 AAR 到 demo/libs/
+./copy-aar-to-demo.sh
+
+# 3. 验证文件存在
+ls -lh demo/libs/library-release.aar
+```
 
 ### 模型未就绪
 

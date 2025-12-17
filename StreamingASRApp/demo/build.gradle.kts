@@ -42,11 +42,15 @@ android {
 }
 
 dependencies {
-    // 依赖 library module（模拟使用 AAR）
-    // 在实际使用时，替换为：implementation(files("libs/library-release.aar"))
-    implementation(project(":library"))
+    // ========================================
+    // 使用 AAR 文件（独立测试 AAR）
+    // ========================================
+    // 使用编译好的 AAR（需要先运行 copy-aar.sh 脚本复制 AAR）
+    implementation(files("libs/library-release.aar"))
 
-    // 必需的外部依赖（使用 AAR 时也需要）
+    // ========================================
+    // 必需的外部依赖
+    // ========================================
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
