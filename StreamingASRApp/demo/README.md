@@ -4,6 +4,18 @@
 
 **重要：** demo 模块通过 AAR 文件使用功能，**不依赖** library 源码模块。这是真正测试 AAR 的方式！
 
+## 🚀 快速开始（一键测试）
+
+```bash
+cd StreamingASRApp
+
+# 运行完整流程脚本（编译 AAR + 复制 + 编译 demo）
+./build-and-test-demo.sh
+
+# 安装到设备
+adb install -r demo/build/outputs/apk/debug/demo-debug.apk
+```
+
 ## 功能测试
 
 此 Demo 测试了 AAR 的所有核心功能：
