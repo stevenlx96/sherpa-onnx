@@ -1,19 +1,37 @@
-# AAR 独立测试 Demo
+# SherpaAsrManager AAR 测试项目
 
-这是一个**完全独立**的 Demo 应用，用于测试 `SherpaAsrManager` AAR 的功能。
+这是一个**完全独立**的 Android 项目，用于测试 `SherpaAsrManager` AAR 的功能。
 
-**重要：** demo 模块通过 AAR 文件使用功能，**不依赖** library 源码模块。这是真正测试 AAR 的方式！
+**重要特性：**
+- ✅ 独立的 Gradle 项目（有自己的 wrapper）
+- ✅ 通过 AAR 文件使用功能，不依赖源码
+- ✅ 可以单独克隆和运行
+- ✅ 真实模拟用户使用 AAR 的场景
 
-## 🚀 快速开始（一键测试）
+## 🚀 快速开始
+
+### 方法 1：作为独立项目使用
+
+```bash
+cd demo
+
+# 1. 准备 AAR 文件（从父项目复制或自己编译）
+# 将 library-release.aar 放到 app/libs/ 目录
+
+# 2. 编译项目
+./gradlew assembleDebug
+
+# 3. 安装到设备
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+### 方法 2：从父项目一键测试
 
 ```bash
 cd StreamingASRApp
 
 # 运行完整流程脚本（编译 AAR + 复制 + 编译 demo）
 ./build-and-test-demo.sh
-
-# 安装到设备
-adb install -r demo/build/outputs/apk/debug/demo-debug.apk
 ```
 
 ## 功能测试
