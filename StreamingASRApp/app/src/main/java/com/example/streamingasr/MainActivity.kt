@@ -38,6 +38,10 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "StreamingASR"
         const val SAMPLE_RATE = 16000
         private const val IDLE_TIMEOUT_MS = 5000L  // 5秒无语音自动休眠
+
+        // VAD 静音阈值配置
+        private const val VAD_SILENCE_FOR_SENTENCE = 1.5F  // 1.5秒静音认为句子结束
+        private const val AUDIO_CHUNK_DURATION = 0.1F      // 每个音频块的时长（秒）
     }
 
     /**
@@ -70,6 +74,12 @@ class MainActivity : AppCompatActivity() {
     private var recognitionJob: Job? = null
     private var kwsJob: Job? = null
     private var lastSpeechTime: Long = 0L  // 最后检测到语音的时间
+
+    // VAD 静音检测
+    private var cumulativeSilenceDuration = 0F  // 累积静音时长（秒）
+
+    // 句子完成回调（可用于 LLM 对接）
+    var onSentenceCompleteListener: ((String) -> Unit)? = null
 
     // 权限请求
     private val requestPermissionLauncher = registerForActivityResult(
@@ -465,6 +475,7 @@ class MainActivity : AppCompatActivity() {
         recognitionJob = lifecycleScope.launch(Dispatchers.IO) {
             var lastText = ""
             val completedText = StringBuilder()  // 累积已完成的文本
+            cumulativeSilenceDuration = 0F  // 重置静音时长
 
             try {
                 while (isActive && isRecording && wakeState == WakeState.ACTIVE) {
@@ -500,10 +511,20 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
 
-                        // 🎯 断句逻辑（三种方式，优先级递减）
+                        // 🎯 断句逻辑（四种方式，优先级递减）
                         val hasSentenceEnd = currentText.contains(Regex("[。！？.!?]"))
-                        val vadDetected = vad?.isSpeechDetected() == false  // VAD 检测到静音
+                        val isSilence = vad?.isSpeechDetected() == false  // VAD 检测到静音
                         val isEndpoint = recognizer?.isEndpoint(stream!!) == true  // 内置 endpoint
+
+                        // VAD 静音时长累积（用于句子完成检测）
+                        if (isSilence) {
+                            cumulativeSilenceDuration += AUDIO_CHUNK_DURATION
+                        } else {
+                            cumulativeSilenceDuration = 0F  // 检测到语音，重置静音时长
+                        }
+
+                        // 检测句子是否完成（静音超过阈值）
+                        val vadSentenceComplete = cumulativeSilenceDuration >= VAD_SILENCE_FOR_SENTENCE && currentText.isNotEmpty()
 
                         // 组合断句策略
                         val shouldBreak = when {
@@ -511,8 +532,8 @@ class MainActivity : AppCompatActivity() {
                                 Log.d(TAG, "断句触发: 标点符号")
                                 true
                             }
-                            vadDetected && currentText.isNotEmpty() -> {
-                                Log.d(TAG, "断句触发: VAD 静音检测")
+                            vadSentenceComplete -> {
+                                Log.d(TAG, "断句触发: VAD 静音检测 (${cumulativeSilenceDuration}s)")
                                 true
                             }
                             isEndpoint -> {
@@ -538,9 +559,13 @@ class MainActivity : AppCompatActivity() {
                                 scrollToBottom()
                             }
 
+                            // 🎯 触发句子完成回调（可用于 LLM 对接）
+                            onSentenceCompleteListener?.invoke(currentText)
+
                             // 重置流，继续识别下一句
                             recognizer?.reset(stream!!)
                             vad?.reset()  // 重置 VAD
+                            cumulativeSilenceDuration = 0F  // 重置静音时长
                             lastText = ""
                         } else if (currentText != lastText) {
                             // 实时更新：只有文本长度>=3个字符时才显示（给热词更多上下文）
