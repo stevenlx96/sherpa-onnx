@@ -1,172 +1,223 @@
-# Demo App - AAR 功能测试
+# AAR 测试 Demo
 
-这是一个测试 StreamingASR AAR 功能的 Demo 应用。
+这是一个简单的 Demo 应用，用于测试 `SherpaAsrManager` AAR 的功能。
 
-## 📋 项目说明
+## 功能测试
 
-此 Demo 演示如何使用 `library` module（模拟使用 AAR 的效果）：
+此 Demo 测试了 AAR 的所有核心功能：
 
-- ✅ 使用 `ModelManager` 从数据目录加载模型
-- ✅ 使用 `AudioRecorder` 录制音频
-- ✅ 实现实时流式语音识别
-- ✅ 功能与原 app 完全一致
+- ✅ **SherpaAsrManager 高级 API** - 简洁的回调接口
+- ✅ **KWS 唤醒检测** - 自动进入待机/激活模式
+- ✅ **VAD 智能断句** - 队列机制检测句子完成
+- ✅ **实时识别** - 边说边显示部分结果
+- ✅ **句子完成回调** - 适合 LLM 对接
+- ✅ **状态管理** - STANDBY / ACTIVE 自动切换
+- ✅ **错误处理** - 完整的错误回调
 
-## 🎯 目的
+## 使用步骤
 
-1. **开发测试**：在开发过程中直接依赖 `library` module，无需每次打包 AAR
-2. **功能验证**：确保 AAR 打包后的功能正常
-3. **使用示例**：展示如何集成和使用 AAR
+### 1. 部署模型文件
 
-## 🏗️ 依赖配置
+模型需要部署到设备：
 
-### 当前配置（开发模式）
+```bash
+# 推送到 sdcard
+adb push models/ /sdcard/
+
+# 复制到应用数据目录
+adb shell
+su
+cp -r /sdcard/models /data/data/com.example.demo.streamingasr/files/
+chmod -R 755 /data/data/com.example.demo.streamingasr/files/models
+```
+
+### 2. 编译和安装
+
+```bash
+cd StreamingASRApp
+
+# 编译 demo
+./gradlew :demo:assembleDebug
+
+# 安装到设备
+adb install -r demo/build/outputs/apk/debug/demo-debug.apk
+```
+
+### 3. 运行测试
+
+1. 授予录音权限
+2. 点击"开始监听"
+3. 如果有 KWS 模型：说唤醒词激活
+4. 说话测试识别
+5. 观察 VAD 断句效果
+6. 查看句子完成回调日志
+
+## 代码示例
+
+Demo 展示了如何使用 SherpaAsrManager：
+
+```kotlin
+// 创建 ASR Manager
+val asr = SherpaAsrManager(context)
+
+// 配置 VAD 参数（可选）
+asr.vadConfig = SherpaAsrManager.VadConfig(
+    minSilenceDuration = 1.0F  // 静音 1 秒算句子结束
+)
+
+// 设置回调
+asr.onWakeWordDetected = { keyword ->
+    Log.i(TAG, "唤醒: $keyword")
+}
+
+asr.onSentenceComplete = { text ->
+    // 🎯 发送给 LLM
+    sendToLLM(text)
+}
+
+asr.onPartialResult = { text ->
+    // 实时显示
+    updateUI(text)
+}
+
+asr.onStateChanged = { state ->
+    when (state) {
+        State.STANDBY -> Log.i(TAG, "待机...")
+        State.ACTIVE -> Log.i(TAG, "识别中...")
+    }
+}
+
+// 开始监听
+asr.startListening()
+
+// 停止监听
+asr.stopListening()
+
+// 释放资源
+asr.release()
+```
+
+## 测试要点
+
+### 1. KWS 唤醒测试
+
+如果部署了 KWS 模型：
+- 启动后自动进入待机模式
+- 说唤醒词"你好小智"
+- 应显示"🔊 已唤醒"
+- 自动切换到识别模式
+
+### 2. VAD 断句测试
+
+- 说一句话后停顿 1 秒
+- 应该触发句子完成
+- 结果前面显示 "✓" 标记
+- 查看 Logcat 确认 VAD 队列触发
+
+### 3. 实时识别测试
+
+- 说话时应该实时显示部分结果
+- 结果前面显示 "⏳" 标记
+- 断句后变成完成状态 "✓"
+
+### 4. 同音字纠正测试
+
+如果部署了 `replace.fst` 和 `lexicon.txt`：
+- 说"在坐的各位"
+- 应该自动纠正为"在座的各位"
+
+### 5. LLM 对接测试
+
+在句子完成回调中：
+```kotlin
+asr.onSentenceComplete = { text ->
+    // 这里可以发送给 LLM
+    Log.i(TAG, "📤 可以发送给 LLM: $text")
+}
+```
+
+## 日志输出
+
+Demo 会输出详细的日志：
+
+```
+I/AARDemo: 🔊 检测到唤醒词: 你好小智
+I/AARDemo: ✓ 句子完成: 今天天气真好
+I/AARDemo: 📤 可以发送给 LLM: 今天天气真好
+```
+
+## 目录结构
+
+```
+demo/
+  ├── build.gradle.kts          # 构建配置（依赖 library 模块）
+  ├── src/main/
+  │   ├── AndroidManifest.xml   # 权限配置
+  │   ├── java/com/example/demo/
+  │   │   └── MainActivity.kt   # 测试代码
+  │   └── res/layout/
+  │       └── activity_main.xml # UI 布局
+  └── README.md                  # 本文档
+```
+
+## 依赖说明
+
+Demo 依赖 library 模块：
 
 ```kotlin
 dependencies {
-    // 直接依赖 library module
+    // 依赖 library module（开发测试）
     implementation(project(":library"))
 
     // 必需的外部依赖
-    implementation("androidx.core:core-ktx:1.12.0")
-    // ...
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
 ```
 
-### 使用 AAR 时的配置
+## 切换到 AAR 测试
 
-如果要使用打包好的 AAR，修改为：
+要测试真正的 AAR 文件，修改 `build.gradle.kts`：
 
 ```kotlin
 dependencies {
-    // 使用 AAR 文件
-    implementation(files("libs/library-release.aar"))
+    // 注释掉 library 模块
+    // implementation(project(":library"))
 
-    // 必需的外部依赖（保持不变）
-    implementation("androidx.core:core-ktx:1.12.0")
-    // ...
+    // 改用 AAR 文件
+    implementation(files("libs/library-release.aar"))
 }
 ```
 
-## 🚀 运行 Demo
+## 故障排查
 
-### 1. 准备模型文件
+### 模型未就绪
 
-模型文件需要放在：
+确保模型文件部署到：
 ```
 /data/data/com.example.demo.streamingasr/files/models/
 ```
 
-使用 adb 推送模型：
+使用 `adb shell ls` 验证文件存在。
 
-```bash
-# 创建目录
-adb shell mkdir -p /data/data/com.example.demo.streamingasr/files/models
+### 权限被拒绝
 
-# 推送模型文件
-adb push encoder-epoch-99-avg-1.onnx /data/data/com.example.demo.streamingasr/files/models/
-adb push decoder-epoch-99-avg-1.onnx /data/data/com.example.demo.streamingasr/files/models/
-adb push joiner-epoch-99-avg-1.onnx /data/data/com.example.demo.streamingasr/files/models/
-adb push tokens.txt /data/data/com.example.demo.streamingasr/files/models/
+在应用设置中手动授予录音权限。
 
-# 验证
-adb shell ls -lh /data/data/com.example.demo.streamingasr/files/models/
-```
+### 无法唤醒
 
-### 2. 运行应用
+1. 检查 KWS 模型是否部署
+2. 检查 `keywords.txt` 文件
+3. 尝试提高唤醒阈值
 
-在 Android Studio 中：
-1. 同步项目：Sync Project with Gradle Files
-2. 选择 `demo` 配置
-3. 运行到设备
+### VAD 不断句
 
-## 📦 代码结构
-
-```
-demo/
-├── src/main/
-│   ├── java/com/example/demo/
-│   │   └── MainActivity.kt          # 主界面（使用 AAR 中的类）
-│   ├── res/
-│   │   ├── layout/
-│   │   │   └── activity_main.xml   # 界面布局
-│   │   └── values/
-│   │       ├── strings.xml
-│   │       ├── colors.xml
-│   │       └── themes.xml
-│   └── AndroidManifest.xml
-└── build.gradle.kts                 # 依赖配置
-```
-
-## 💡 关键代码
-
-### 使用 ModelManager 加载模型
-
+调整 VAD 参数：
 ```kotlin
-// 创建 ModelManager（来自 AAR）
-val modelManager = ModelManager(context)
-
-// 自动检测并加载模型
-val recognizer = modelManager.createOnlineRecognizerAuto()
-
-if (recognizer != null) {
-    // 模型加载成功，开始识别
-} else {
-    // 模型加载失败，显示说明
-    val instructions = modelManager.getModelDownloadInstructions()
-}
+asr.vadConfig = SherpaAsrManager.VadConfig(
+    minSilenceDuration = 0.8F  // 降低阈值更敏感
+)
 ```
-
-### 使用 AudioRecorder 录制音频
-
-```kotlin
-// 创建 AudioRecorder（来自 AAR）
-val audioRecorder = AudioRecorder(sampleRate, cacheDir)
-
-// 开始录制
-audioRecorder.startRecording(savePcm = true)
-
-// 读取音频数据
-val samples = audioRecorder.readAudioData()
-
-// 停止录制
-audioRecorder.stopRecording()
-```
-
-## 🔍 与原 app 的区别
-
-| 项目 | 原 app | Demo |
-|------|--------|------|
-| 包名 | com.example.streamingasr | com.example.demo.streamingasr |
-| 依赖方式 | 直接包含源代码 | 依赖 library module（模拟 AAR） |
-| 功能 | 完全相同 | 完全相同 |
-| 模型路径 | /data/data/com.example.streamingasr/files/models/ | /data/data/com.example.demo.streamingasr/files/models/ |
-
-## ✅ 功能清单
-
-- [x] 实时流式语音识别
-- [x] 自动检测模型文件
-- [x] 支持 Transducer/Paraformer/CTC 模型
-- [x] PCM 音频缓存
-- [x] 句子断句（标点符号 + 静音检测）
-- [x] 自我修正检测
-- [x] 权限管理
-- [x] 错误处理和提示
-
-## 📝 注意事项
-
-1. **模型文件**：Demo 使用独立的应用包名，模型文件路径不同于原 app
-2. **依赖方式**：开发时依赖 `library` module，实际使用时改为 AAR 文件
-3. **权限**：需要录音权限（RECORD_AUDIO）
-
-## 🎓 学习要点
-
-通过此 Demo 可以学习：
-
-1. 如何集成和使用 StreamingASR AAR
-2. 如何使用 ModelManager 管理模型
-3. 如何实现实时流式语音识别
-4. 如何处理音频录制和识别结果
 
 ---
 
-**运行 Demo 前，记得先推送模型文件到设备！** 🚀
+**提示**：此 Demo 是测试 AAR 功能的最简示例，展示了如何正确使用 SherpaAsrManager 高级 API。

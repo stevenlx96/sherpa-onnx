@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="StreamingASR Demo"
+        android:text="SherpaAsrManager Demo"
         android:textSize="24sp"
         android:textStyle="bold"
         android:gravity="center"
@@ -18,7 +18,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="测试 AAR 功能"
+        android:text="测试 AAR 高级 API"
         android:textSize="14sp"
         android:gravity="center"
         android:paddingBottom="16dp"
@@ -49,11 +49,11 @@
         android:paddingBottom="16dp">
 
         <Button
-            android:id="@+id/btnStartStop"
+            android:id="@+id/btnStart"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="开始识别"
+            android:text="开始监听"
             android:backgroundTint="@android:color/holo_green_light"
             android:textColor="@android:color/white" />
 
@@ -62,12 +62,12 @@
             android:layout_height="match_parent" />
 
         <Button
-            android:id="@+id/btnClearCache"
+            android:id="@+id/btnStop"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="清除缓存"
-            android:backgroundTint="@android:color/holo_orange_light"
+            android:text="停止监听"
+            android:backgroundTint="@android:color/holo_red_light"
             android:textColor="@android:color/white" />
     </LinearLayout>
 
