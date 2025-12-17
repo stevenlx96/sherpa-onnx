@@ -20,7 +20,7 @@ library/build/outputs/aar/library-release.aar
 - ✅ `ModelManager` - 模型管理
 - ✅ `AudioRecorder` - 音频录制
 - ✅ `Vad`, `KeywordSpotter`, `OnlineRecognizer` - Sherpa-ONNX 接口
-- ⚠️  **不包含 JNI 库** - 需要单独部署（见下方说明）
+- ✅ **JNI 库（.so 文件）** - 已打包进 AAR，无需单独部署
 - ⚠️  **不包含模型文件** - 需要单独部署到设备
 
 ---
@@ -50,38 +50,7 @@ dependencies {
 }
 ```
 
-### 2. 部署 Sherpa-ONNX JNI 库
-
-**重要：** AAR 不包含 `.so` 文件，需要手动添加到项目中。
-
-#### 方法 A：从 Maven 引入（推荐）
-
-在 `app/build.gradle.kts` 添加：
-
-```kotlin
-dependencies {
-    // Sherpa-ONNX JNI 库（替换为实际版本）
-    implementation("com.k2fsa.sherpa:sherpa-onnx-android:1.x.x")
-}
-```
-
-#### 方法 B：手动复制 .so 文件
-
-1. 下载 Sherpa-ONNX 预编译库：
-   ```
-   https://github.com/k2-fsa/sherpa-onnx/releases
-   ```
-
-2. 复制到项目：
-   ```
-   your-project/app/src/main/jniLibs/
-     ├── arm64-v8a/
-     │   └── libsherpa-onnx-jni.so
-     └── armeabi-v7a/
-         └── libsherpa-onnx-jni.so
-   ```
-
-### 3. 部署模型文件
+### 2. 部署模型文件
 
 模型文件需要部署到设备的内部存储：
 
@@ -381,6 +350,27 @@ https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-s
 ```
 https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx
 ```
+
+---
+
+## 🔔 重要说明
+
+### JNI 库
+
+- ✅ **已打包进 AAR**：`.so` 文件已包含，使用者无需额外配置
+- ✅ 支持架构：arm64-v8a, armeabi-v7a
+- ✅ 直接放到 libs 文件夹即可使用
+
+### 模型文件
+
+- ⚠️ **需要单独部署**：不打包进 AAR（避免体积过大）
+- 📁 **部署位置**：`/data/data/包名/files/models/`
+- 🔄 **自动适配**：不同应用使用同一个 AAR，模型路径会自动适配到各自的包名
+
+### HomophoneReplacer（同音字纠正）
+
+- 需要部署 `lexicon.txt` 和 `replace.fst` 到 `asr/` 目录
+- ModelManager 会自动加载并启用
 
 ---
 
