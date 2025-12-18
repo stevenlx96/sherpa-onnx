@@ -9,83 +9,69 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="SherpaAsrManager Demo"
+        android:text="@string/app_name"
         android:textSize="24sp"
         android:textStyle="bold"
         android:gravity="center"
-        android:paddingBottom="8dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="测试 AAR 高级 API"
-        android:textSize="14sp"
-        android:gravity="center"
-        android:paddingBottom="16dp"
-        android:textColor="@android:color/darker_gray" />
+        android:paddingBottom="16dp" />
 
     <!-- 状态显示 -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="状态:"
-        android:textStyle="bold"
-        android:paddingBottom="4dp" />
-
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="等待初始化..."
+        android:text="@string/status_initializing"
         android:textSize="14sp"
-        android:paddingBottom="16dp"
-        android:minLines="3" />
+        android:padding="12dp"
+        android:background="@android:color/darker_gray"
+        android:textColor="@android:color/white"
+        android:layout_marginBottom="16dp" />
 
     <!-- 控制按钮 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingBottom="16dp">
+        android:layout_marginBottom="16dp">
 
         <Button
-            android:id="@+id/btnStart"
+            android:id="@+id/btnStartStop"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="开始监听"
+            android:text="@string/btn_start"
+            android:textSize="18sp"
             android:backgroundTint="@android:color/holo_green_light"
-            android:textColor="@android:color/white" />
-
-        <Space
-            android:layout_width="8dp"
-            android:layout_height="match_parent" />
+            android:layout_marginEnd="8dp" />
 
         <Button
-            android:id="@+id/btnStop"
+            android:id="@+id/btnClearCache"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="停止监听"
-            android:backgroundTint="@android:color/holo_red_light"
-            android:textColor="@android:color/white" />
+            android:text="@string/btn_clear"
+            android:textSize="18sp"
+            android:backgroundTint="@android:color/holo_orange_light" />
     </LinearLayout>
 
-    <!-- 识别结果 -->
+    <!-- 识别结果标题 -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="识别结果:"
+        android:text="@string/recognition_result"
+        android:textSize="18sp"
         android:textStyle="bold"
-        android:paddingBottom="4dp" />
+        android:paddingBottom="8dp" />
 
+    <!-- 识别结果显示区域 (可滚动) -->
     <ScrollView
         android:id="@+id/scrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:background="@android:color/white"
-        android:padding="8dp">
+        android:padding="12dp"
+        android:scrollbars="vertical">
 
         <TextView
             android:id="@+id/tvResult"
@@ -93,7 +79,18 @@
             android:layout_height="wrap_content"
             android:textSize="16sp"
             android:textColor="@android:color/black"
-            android:hint="识别结果会显示在这里..." />
+            android:lineSpacingExtra="4dp"
+            android:hint="@string/result_hint" />
     </ScrollView>
+
+    <!-- 底部说明 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/bottom_info"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:textColor="@android:color/darker_gray" />
 
 </LinearLayout>
