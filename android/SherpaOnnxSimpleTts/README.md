@@ -18,6 +18,47 @@
 
 ## 模型下载与配置
 
+### 🚀 快速配置脚本（推荐）
+
+如果你已经安装了应用，可以使用以下一键配置脚本：
+
+```bash
+#!/bin/bash
+# 快速配置脚本 - setup_model.sh
+
+# 1. 下载模型（如果还没下载）
+if [ ! -d "vits-melo-tts-zh_en" ]; then
+    echo "正在下载模型..."
+    wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
+    tar -xjf vits-melo-tts-zh_en.tar.bz2
+    rm vits-melo-tts-zh_en.tar.bz2
+fi
+
+# 2. 创建目录
+echo "创建目录..."
+adb shell mkdir -p /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en
+
+# 3. 推送模型文件
+echo "推送模型文件..."
+adb push vits-melo-tts-zh_en/model.onnx /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+adb push vits-melo-tts-zh_en/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+adb push vits-melo-tts-zh_en/tokens.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+
+# 4. 验证
+echo "验证文件..."
+adb shell ls -lh /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+
+echo "✅ 配置完成！现在可以启动应用了。"
+```
+
+保存为 `setup_model.sh` 并运行：
+```bash
+chmod +x setup_model.sh
+./setup_model.sh
+```
+
+---
+
 ### 步骤 1: 下载 TTS 模型
 
 下载 **vits-melo-tts-zh_en** 模型：
@@ -34,31 +75,42 @@ tar -xjf vits-melo-tts-zh_en.tar.bz2
 
 ### 步骤 2: 配置模型文件
 
-将解压后的模型文件放到项目的 `assets` 目录：
+**重要**: 模型文件需要放在设备的 **应用私有目录** 中，而不是打包在 APK 里。
 
-```
-SherpaOnnxSimpleTts/
-└── app/
-    └── src/
-        └── main/
-            └── assets/
-                └── vits-melo-tts-zh_en/
-                    ├── model.onnx          # 主模型文件
-                    ├── lexicon.txt         # 词典文件
-                    ├── tokens.txt          # 标记文件
-                    ├── date.fst            # 日期规则 (可选)
-                    ├── number.fst          # 数字规则 (可选)
-                    └── phone.fst           # 音素规则 (可选)
+#### 方法 1: 使用 adb 推送（推荐开发时使用）
+
+```bash
+# 安装应用后，使用 adb 推送模型文件
+adb shell mkdir -p /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en
+
+adb push vits-melo-tts-zh_en/model.onnx /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+adb push vits-melo-tts-zh_en/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+adb push vits-melo-tts-zh_en/tokens.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
 ```
 
-**注意**：如果 `assets` 目录不存在，请手动创建。
+#### 方法 2: 应用内下载（生产环境推荐）
 
-### 步骤 3: 验证文件
+在实际应用中，可以让应用首次运行时从网络下载模型到 `files/models/tts/` 目录。
 
-确保以下三个核心文件存在：
-- ✅ `app/src/main/assets/vits-melo-tts-zh_en/model.onnx`
-- ✅ `app/src/main/assets/vits-melo-tts-zh_en/lexicon.txt`
-- ✅ `app/src/main/assets/vits-melo-tts-zh_en/tokens.txt`
+#### 方法 3: 使用 SD 卡（需要权限）
+
+也可以先将模型放到 SD 卡，然后在应用中复制到私有目录。
+
+### 步骤 3: 验证文件路径
+
+模型文件应该在以下位置：
+
+```
+/data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+├── model.onnx          # 主模型文件（必需）
+├── lexicon.txt         # 词典文件（必需）
+└── tokens.txt          # 标记文件（必需）
+```
+
+使用 adb 验证：
+```bash
+adb shell ls -lh /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+```
 
 ## 构建与运行
 

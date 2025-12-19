@@ -142,52 +142,77 @@ class MainActivity : AppCompatActivity() {
         // 模型配置
         // 这里使用 vits-melo-tts-zh_en 模型，支持中英文混合
         //
-        // 你需要下载模型并放在 assets 目录下
+        // 模型路径: /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+        //
         // 下载地址: https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
         //
-        // 解压后，将以下文件放到 app/src/main/assets/vits-melo-tts-zh_en/ 目录:
+        // 需要的文件:
         //   - model.onnx
         //   - lexicon.txt
         //   - tokens.txt
-        //   - date.fst
-        //   - number.fst
-        //   - phone.fst
 
         val modelDir = "vits-melo-tts-zh_en"
         val modelName = "model.onnx"
         val lexicon = "lexicon.txt"
 
+        // 模型文件路径
+        val modelBasePath = File(filesDir, "models/tts")
+        val modelPath = File(modelBasePath, modelDir)
+
+        Log.i(TAG, "模型路径: ${modelPath.absolutePath}")
+
         // 检查模型文件是否存在
-        try {
-            val modelFiles = application.assets.list(modelDir)
-            if (modelFiles.isNullOrEmpty()) {
-                throw Exception("模型目录 $modelDir 不存在或为空！请下载模型并放到 assets 目录。")
-            }
-            Log.i(TAG, "找到模型文件: ${modelFiles.joinToString(", ")}")
-        } catch (e: Exception) {
-            Toast.makeText(
-                applicationContext,
-                "错误: ${e.message}\n\n请参考 README.md 下载并配置模型文件",
-                Toast.LENGTH_LONG
-            ).show()
-            throw e
+        val modelFile = File(modelPath, modelName)
+        val lexiconFile = File(modelPath, lexicon)
+        val tokensFile = File(modelPath, "tokens.txt")
+
+        if (!modelPath.exists() || !modelFile.exists() || !lexiconFile.exists() || !tokensFile.exists()) {
+            val errorMsg = """
+                模型文件未找到！
+
+                请将模型放到以下目录：
+                ${modelPath.absolutePath}/
+
+                需要的文件：
+                - model.onnx
+                - lexicon.txt
+                - tokens.txt
+
+                下载地址：
+                https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
+
+                详细说明请查看 README.md
+            """.trimIndent()
+
+            Log.e(TAG, errorMsg)
+            Toast.makeText(applicationContext, "模型文件未找到，请查看日志", Toast.LENGTH_LONG).show()
+            throw Exception(errorMsg)
         }
 
-        val config = getOfflineTtsConfig(
-            modelDir = modelDir,
-            modelName = modelName,
-            acousticModelName = "",
-            vocoder = "",
-            voices = "",
-            lexicon = lexicon,
-            dataDir = "",
-            dictDir = "",
-            ruleFsts = "",  // 可以添加: "$modelDir/phone.fst,$modelDir/date.fst,$modelDir/number.fst"
+        Log.i(TAG, "找到模型文件:")
+        Log.i(TAG, "  - model.onnx: ${modelFile.exists()}")
+        Log.i(TAG, "  - lexicon.txt: ${lexiconFile.exists()}")
+        Log.i(TAG, "  - tokens.txt: ${tokensFile.exists()}")
+
+        // 使用绝对路径配置
+        val config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                vits = OfflineTtsVitsModelConfig(
+                    model = modelFile.absolutePath,
+                    lexicon = lexiconFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    dataDir = "",
+                ),
+                numThreads = 2,
+                debug = true,
+                provider = "cpu",
+            ),
+            ruleFsts = "",
             ruleFars = "",
-            isKitten = false
         )
 
-        tts = OfflineTts(assetManager = application.assets, config = config)
+        // 不使用 AssetManager，直接从文件系统加载
+        tts = OfflineTts(assetManager = null, config = config)
 
         val numSpeakers = tts.numSpeakers()
         Log.i(TAG, "TTS 模型说话人数量: $numSpeakers")

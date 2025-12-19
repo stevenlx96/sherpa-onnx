@@ -1,42 +1,31 @@
-# 模型文件目录
+# Assets 目录
 
-请将下载的 TTS 模型文件放置在此目录下。
+⚠️ **注意**: 本项目不再使用 assets 目录存放 TTS 模型！
 
-## 推荐模型：vits-melo-tts-zh_en
+## 新的模型存放位置
 
-### 下载地址
-https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
-
-### 目录结构
-
-解压后，将文件放置如下：
+模型文件现在存放在应用的私有存储目录：
 
 ```
-assets/
-└── vits-melo-tts-zh_en/
-    ├── model.onnx          (必需)
-    ├── lexicon.txt         (必需)
-    ├── tokens.txt          (必需)
-    ├── date.fst            (可选)
-    ├── number.fst          (可选)
-    └── phone.fst           (可选)
+/data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/
 ```
 
-### 快速下载脚本
+## 为什么改变？
 
-```bash
-# 在项目根目录执行
-cd app/src/main/assets
+- ✅ **APK 体积小**: 模型文件不会打包到 APK 中（模型文件通常 100MB+）
+- ✅ **灵活更新**: 可以单独下载或更新模型，无需重新安装应用
+- ✅ **更好的实践**: 符合 Android 应用的最佳实践
 
-# 下载并解压
-wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
-tar -xjf vits-melo-tts-zh_en.tar.bz2
+## 如何配置模型？
 
-# 清理压缩包
-rm vits-melo-tts-zh_en.tar.bz2
-```
+请参考项目根目录的 **README.md** 文件，里面有详细的模型配置说明。
 
-## 注意事项
+简要步骤：
 
-⚠️ 不要将模型文件提交到 Git 仓库（文件较大）
-⚠️ 确保三个核心文件（model.onnx, lexicon.txt, tokens.txt）都存在
+1. 下载模型文件
+2. 使用 adb 推送到应用私有目录：
+   ```bash
+   adb push vits-melo-tts-zh_en/* /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+   ```
+
+详细说明请查看主 README.md
