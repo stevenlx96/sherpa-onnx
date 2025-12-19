@@ -12,11 +12,26 @@
 
 ## 环境要求
 
-- Android Studio Arctic Fox (2020.3.1) 或更高版本
-- Android SDK API 21 (Android 5.0) 或更高版本
-- JDK 8 或更高版本
+- Android Studio Hedgehog (2023.1.1) 或更高版本
+- Android SDK API 34
+- JDK 17
+- Gradle 8.6+
+- Android NDK (如果需要从源码编译 JNI 库)
 
-## 模型下载与配置
+## 准备工作
+
+### 1. 下载 JNI 库文件（必需）
+
+项目需要 sherpa-onnx 的 JNI 库文件才能运行。运行以下脚本自动下载：
+
+```bash
+cd android/SherpaOnnxSimpleTts
+./download_jni_libs.sh
+```
+
+该脚本会从官方 GitHub Release 下载预编译的库文件并放到 `jniLibs` 目录。
+
+### 2. 模型下载与配置
 
 ### 🚀 快速配置脚本（推荐）
 
