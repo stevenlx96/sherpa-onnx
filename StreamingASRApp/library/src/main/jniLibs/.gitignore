@@ -1,0 +1,6 @@
+# 忽略所有 .so 文件（本地编译）
+*.so
+
+# 但保留目录结构
+!.gitignore
+!README.md

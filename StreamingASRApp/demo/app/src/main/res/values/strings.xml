@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">实时语音识别 Demo (AAR)</string>
+    <string name="status_initializing">初始化中...</string>
+    <string name="btn_start">开始识别</string>
+    <string name="btn_stop">停止识别</string>
+    <string name="btn_export_wav">导出WAV</string>
+    <string name="btn_clear">清除</string>
+    <string name="recognition_result">识别结果:</string>
+    <string name="result_hint">点击"开始识别"开始实时语音识别...</string>
+    <string name="bottom_info">AAR 测试项目 | PCM格式 | 16kHz采样率 | 模型位置: /data/data/com.example.demo/files/models/</string>
+</resources>
