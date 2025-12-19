@@ -1,131 +1,67 @@
 # 快速设置指南
 
-这是一个**零配置**的简单中文 TTS demo，按以下步骤操作即可运行。
+## 第一步：获取 JNI 库
 
-## 📋 环境要求
-
-确认你的开发环境满足以下要求：
-- ✅ **JDK 17**
-- ✅ **Android Studio Hedgehog** (2023.1.1+)
-- ✅ **Android SDK 34**
-- ✅ **Gradle 8.6+**（自动使用，无需手动安装）
-
-## 🚀 快速开始（3步）
-
-### 步骤 1: 下载 JNI 库
+运行下载脚本获取所需的 native 库文件：
 
 ```bash
 cd android/SherpaOnnxSimpleTts
 ./download_jni_libs.sh
 ```
 
-这会自动下载预编译的 JNI 库文件（约 50MB）。
-
-### 步骤 2: 构建并安装应用
+**如果下载失败**，请从项目根目录运行构建脚本：
 
 ```bash
-./gradlew installDebug
+cd ../..
+./build-android-arm64-v8a.sh    # 构建 ARM64 库
+./build-android-armv7-eabi.sh   # 构建 ARMv7 库
 ```
 
-或者在 Android Studio 中直接点击 Run ▶️
+然后复制生成的 .so 文件到 jniLibs 目录：
 
-### 步骤 3: 配置 TTS 模型
-
-**方法 A：使用一键脚本**（推荐）
 ```bash
-./setup_model.sh
+cd android/SherpaOnnxSimpleTts
+cp ../../build-android-arm64-v8a/install/lib/*.so app/src/main/jniLibs/arm64-v8a/
+cp ../../build-android-armv7-eabi/install/lib/*.so app/src/main/jniLibs/armeabi-v7a/
 ```
 
-**方法 B：手动配置**
+## 第二步：构建 APK
+
 ```bash
-# 下载模型
-wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
-tar -xjf vits-melo-tts-zh_en.tar.bz2
-
-# 推送到设备
-adb shell mkdir -p /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en
-adb push vits-melo-tts-zh_en/model.onnx /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
-adb push vits-melo-tts-zh_en/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
-adb push vits-melo-tts-zh_en/tokens.txt /data/data/com.k2fsa.sherpa.onnx.simpletts/files/models/tts/vits-melo-tts-zh_en/
+./gradlew assembleDebug
 ```
 
-## ✅ 完成！
+APK 位置：`app/build/outputs/apk/debug/app-debug.apk`
 
-现在打开应用，输入中文文字，点击"朗读"按钮即可。
+## 第三步：安装并准备模型文件
 
----
+1. 安装 APK 到设备：
+   ```bash
+   adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
 
-## 🐛 常见问题
+2. 下载中文 TTS 模型（如 vits-melo-tts-zh_en）
 
-### Q1: 构建失败 "Minimum supported Gradle version is 8.6"
+3. 推送模型文件到设备：
+   ```bash
+   adb push /path/to/model.onnx /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
+   adb push /path/to/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
+   adb push /path/to/tokens.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
+   ```
 
-**解决**：项目已配置使用 Gradle 8.6，清理缓存后重试：
-```bash
-./gradlew clean
-./gradlew build
-```
+## 完成！
 
-### Q2: 运行时崩溃 "UnsatisfiedLinkError"
+现在可以启动应用，输入中文文字并点击"开始朗读"按钮了。
 
-**原因**：JNI 库文件未下载。
+## 常见问题
 
-**解决**：运行 `./download_jni_libs.sh`
+**Q: 应用崩溃，提示 UnsatisfiedLinkError**
+A: 请确保已完成第一步，将 .so 文件放到 jniLibs 目录。
 
-### Q3: 应用启动但提示"模型文件未找到"
+**Q: 提示模型文件未找到**
+A: 请确保模型文件路径正确：`/data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/`
 
-**原因**：TTS 模型未配置。
+**Q: 构建脚本需要什么环境**
+A: 需要安装 Android NDK，并设置 `ANDROID_NDK` 环境变量。
 
-**解决**：运行 `./setup_model.sh`
-
-### Q4: 找不到 adb 命令
-
-**解决**：将 Android SDK platform-tools 添加到 PATH：
-```bash
-export PATH=$PATH:$ANDROID_HOME/platform-tools
-```
-
----
-
-## 📦 项目结构
-
-```
-SherpaOnnxSimpleTts/
-├── app/
-│   ├── src/main/
-│   │   ├── java/.../MainActivity.kt    # 主代码
-│   │   ├── jniLibs/                    # JNI 库 (download_jni_libs.sh 生成)
-│   │   │   ├── arm64-v8a/
-│   │   │   ├── armeabi-v7a/
-│   │   │   ├── x86_64/
-│   │   │   └── x86/
-│   │   └── res/layout/                 # UI 布局
-│   └── build.gradle                    # App 配置
-├── build.gradle                        # 项目配置 (AGP 8.4.0)
-├── gradle/wrapper/
-│   └── gradle-wrapper.properties       # Gradle 8.6
-├── download_jni_libs.sh                # 下载 JNI 库
-├── setup_model.sh                      # 配置 TTS 模型
-└── README.md                           # 详细文档
-```
-
----
-
-## 🔧 技术栈
-
-| 组件 | 版本 |
-|------|------|
-| Android Gradle Plugin | 8.4.0 |
-| Gradle | 8.6 |
-| Kotlin | 1.9.23 |
-| Java | 17 |
-| compileSdk / targetSdk | 34 |
-| minSdk | 21 |
-| sherpa-onnx | Latest |
-
----
-
-## 📚 更多信息
-
-- 详细文档：[README.md](README.md)
-- sherpa-onnx 官方：https://k2-fsa.github.io/sherpa/onnx/
-- TTS 模型下载：https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
+详细信息请参阅 [README.md](README.md)。

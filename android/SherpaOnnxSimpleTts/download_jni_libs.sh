@@ -1,72 +1,56 @@
 #!/bin/bash
-# 下载预编译的 JNI 库文件
-# 方法：从官方发布的 TTS APK 中提取 SO 文件
+
+# 下载 sherpa-onnx Android JNI 库
+# 使用方法：./download_jni_libs.sh
 
 set -e
 
-echo "================================================"
-echo "  下载 sherpa-onnx JNI 库文件"
-echo "================================================"
-echo ""
+VERSION="1.12.13"
+BASE_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}"
+TARGET_DIR="app/src/main/jniLibs"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 创建 jniLibs 目录
-mkdir -p app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64,x86}
+echo "开始下载 sherpa-onnx JNI 库 (版本 ${VERSION})..."
 
-# 方法 1: 从官方 TTS APK 提取（推荐）
-APK_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-v1.10.30-arm64-v8a-tts-en-kokoro.apk"
+# 创建临时目录
+TMP_DIR=$(mktemp -d)
+cd "$TMP_DIR"
 
-echo "📥 下载官方 TTS APK (约 30MB)..."
-if command -v wget &> /dev/null; then
-    wget -q --show-progress "${APK_URL}" -O sherpa-onnx-tts.apk || {
-        echo "⚠️  wget 下载失败，尝试使用 curl..."
-        curl -L -# "${APK_URL}" -o sherpa-onnx-tts.apk
-    }
-elif command -v curl &> /dev/null; then
-    curl -L -# "${APK_URL}" -o sherpa-onnx-tts.apk
-else
-    echo "❌ 错误: 未找到 wget 或 curl"
-    echo "请手动下载 APK 并提取 SO 文件"
+# 下载 Android 预编译包
+ARCHIVE_FILE="sherpa-onnx-v${VERSION}-android.tar.bz2"
+echo "下载 ${ARCHIVE_FILE}..."
+wget -c "${BASE_URL}/${ARCHIVE_FILE}" || curl -L -o "${ARCHIVE_FILE}" "${BASE_URL}/${ARCHIVE_FILE}"
+
+# 解压文件
+echo "解压文件..."
+tar xf "${ARCHIVE_FILE}"
+
+# 查找解压后的目录
+EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "sherpa-onnx-*-android" | head -1)
+
+if [ -z "$EXTRACTED_DIR" ]; then
+    echo "错误：未找到解压后的目录"
+    ls -la
     exit 1
 fi
 
-echo ""
-echo "📦 解压 APK..."
-unzip -q sherpa-onnx-tts.apk -d sherpa-onnx-extracted
+echo "找到解压目录: ${EXTRACTED_DIR}"
 
-echo "📤 复制 JNI 库文件..."
-# APK 中的 SO 文件在 lib/ 目录下
-if [ -d "sherpa-onnx-extracted/lib" ]; then
-    for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-        if [ -d "sherpa-onnx-extracted/lib/$arch" ]; then
-            echo "  → $arch"
-            cp sherpa-onnx-extracted/lib/$arch/*.so app/src/main/jniLibs/$arch/ 2>/dev/null && \
-            echo "    ✓ 已复制 $(ls sherpa-onnx-extracted/lib/$arch/*.so | wc -l) 个文件" || \
-            echo "    ⚠️  该架构没有 SO 文件"
-        fi
-    done
-else
-    echo "❌ 错误: 在 APK 中未找到 lib/ 目录"
-    ls -la sherpa-onnx-extracted/
-    exit 1
-fi
-
-echo ""
-echo "🧹 清理临时文件..."
-rm -rf sherpa-onnx-tts.apk sherpa-onnx-extracted
-
-echo ""
-echo "================================================"
-echo "  ✅ JNI 库文件下载完成！"
-echo "================================================"
-echo ""
-echo "已安装的库文件："
-for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-    so_files=$(find app/src/main/jniLibs/$arch -name "*.so" 2>/dev/null | wc -l)
-    if [ $so_files -gt 0 ]; then
-        echo "  📱 $arch: $so_files 个文件"
-        ls -lh app/src/main/jniLibs/$arch/*.so | awk '{print "     - " $9 " (" $5 ")"}'
+# 复制 .so 文件到对应的架构目录
+echo "复制 JNI 库文件..."
+for arch in arm64-v8a armeabi-v7a x86 x86_64; do
+    if [ -d "${EXTRACTED_DIR}/jni/${arch}" ]; then
+        echo "  复制 ${arch}..."
+        mkdir -p "${SCRIPT_DIR}/${TARGET_DIR}/${arch}"
+        cp "${EXTRACTED_DIR}/jni/${arch}"/*.so "${SCRIPT_DIR}/${TARGET_DIR}/${arch}/" 2>/dev/null || true
     fi
 done
+
+# 清理临时目录
+cd "$SCRIPT_DIR"
+rm -rf "$TMP_DIR"
+
+echo "完成！JNI 库已下载到 ${TARGET_DIR}"
 echo ""
-echo "🎉 现在可以构建项目了: ./gradlew assembleDebug"
-echo ""
+echo "已安装的库："
+find "${TARGET_DIR}" -name "*.so" -type f 2>/dev/null || echo "未找到 .so 文件"
