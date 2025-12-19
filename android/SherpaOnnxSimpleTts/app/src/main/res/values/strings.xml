@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">简单中文 TTS Demo</string>
+    <string name="text_label">请输入要朗读的文字：</string>
+    <string name="text_hint">在这里输入中文文字...</string>
+    <string name="speak_button">🔊 朗读</string>
+    <string name="stop_button">⏹ 停止</string>
+</resources>
