@@ -75,6 +75,9 @@ class MainActivity : AppCompatActivity() {
             attr, format, bufLength, AudioTrack.MODE_STREAM,
             AudioManager.AUDIO_SESSION_ID_GENERATE
         )
+
+        // 设置音量为最大（解决声音小的问题）
+        track.setVolume(AudioTrack.getMaxVolume())
         track.play()
     }
 
@@ -109,7 +112,7 @@ class MainActivity : AppCompatActivity() {
                 tts.generateWithCallback(
                     text = textStr,
                     sid = 0,
-                    speed = 1.0f,
+                    speed = 0.8f,  // 降低速度（0.8倍速），让短语更清晰
                     callback = this::callback
                 )
 
