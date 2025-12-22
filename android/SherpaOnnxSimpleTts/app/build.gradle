@@ -37,4 +37,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // Sherpa ONNX - 包含 JNI 库和 TTS API
+    implementation 'com.k2fsa:sherpa-onnx:1.10.30'
 }
