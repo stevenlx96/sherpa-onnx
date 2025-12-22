@@ -49,7 +49,4 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    
-    // Sherpa ONNX
-    implementation("com.k2fsa:sherpa-onnx:1.10.30")
 }
