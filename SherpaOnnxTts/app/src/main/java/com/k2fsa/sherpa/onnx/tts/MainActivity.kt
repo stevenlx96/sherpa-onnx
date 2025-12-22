@@ -152,9 +152,8 @@ class MainActivity : AppCompatActivity() {
 
         Log.i(TAG, "模型路径: ${modelPath.absolutePath}")
 
-        // 检查模型文件（matcha 模型需要 acoustic_model 和 vocoder）
-        val acousticModelFile = File(modelPath, "model.onnx")
-        val vocoderFile = File(modelPath, "espeak-ng-data")  // matcha 使用 espeak-ng-data 目录
+        // 检查模型文件
+        val acousticModelFile = File(modelPath, "model-steps-3.onnx")  // matcha 模型文件名
         val lexiconFile = File(modelPath, "lexicon.txt")
         val tokensFile = File(modelPath, "tokens.txt")
 
@@ -165,10 +164,10 @@ class MainActivity : AppCompatActivity() {
                 请将模型放到: ${modelPath.absolutePath}/
 
                 需要的文件:
-                - model.onnx
+                - model-steps-3.onnx
                 - lexicon.txt
                 - tokens.txt
-                - espeak-ng-data/ (目录)
+                - dict/ (目录)
 
                 下载地址:
                 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2
@@ -182,10 +181,10 @@ class MainActivity : AppCompatActivity() {
             model = OfflineTtsModelConfig(
                 matcha = OfflineTtsMatchaModelConfig(
                     acousticModel = acousticModelFile.absolutePath,
-                    vocoder = "",  // matcha 不需要单独的 vocoder 文件
+                    vocoder = "",
                     lexicon = lexiconFile.absolutePath,
                     tokens = tokensFile.absolutePath,
-                    dataDir = modelPath.absolutePath,  // espeak-ng-data 所在目录
+                    dataDir = "",
                 ),
                 numThreads = 2,
                 debug = true,
