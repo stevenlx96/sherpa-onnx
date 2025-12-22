@@ -1,7 +1,0 @@
-<resources>
-    <string name="app_name">Sherpa Onnx TTS</string>
-    <string name="title">Sherpa Onnx TTS Demo</string>
-    <string name="hint_input_text">请输入要朗读的文字</string>
-    <string name="btn_speak">开始朗读</string>
-    <string name="btn_stop">停止</string>
-</resources>

@@ -16,7 +16,7 @@ import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
 
-const val TAG = "SimpleTts"
+private const val TAG = "SherpaOnnxTts"
 
 class MainActivity : AppCompatActivity() {
     private lateinit var tts: OfflineTts
@@ -31,8 +31,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         textInput = findViewById(R.id.text_input)
-        speakButton = findViewById(R.id.speak_button)
-        stopButton = findViewById(R.id.stop_button)
+        speakButton = findViewById(R.id.btn_speak)
+        stopButton = findViewById(R.id.btn_stop)
 
         // 设置默认文本
         textInput.setText("你好，这是一个简单的中文语音合成示例。")
@@ -160,14 +160,14 @@ class MainActivity : AppCompatActivity() {
         if (!modelFile.exists() || !lexiconFile.exists() || !tokensFile.exists()) {
             val errorMsg = """
                 模型文件未找到！
-
+                
                 请将模型放到: ${modelPath.absolutePath}/
-
+                
                 需要的文件:
                 - model.onnx
                 - lexicon.txt
                 - tokens.txt
-
+                
                 下载地址:
                 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
             """.trimIndent()

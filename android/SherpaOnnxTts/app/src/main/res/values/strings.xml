@@ -1,11 +1,6 @@
 <resources>
-    <string name="app_name">TTS</string>
-    <string name="sid_label">Speaker ID</string>
-    <string name="sid_hint">0</string>
-    <string name="speed_label">Speech speed (large->fast)</string>
-    <string name="speed_hint">1.0</string>
-    <string name="text_hint">Please input your text here</string>
-    <string name="generate">Generate</string>
-    <string name="play">Play</string>
-    <string name="stop">Stop</string>
+    <string name="app_name">Sherpa TTS</string>
+    <string name="input_hint">请输入要朗读的文字</string>
+    <string name="btn_speak">开始朗读</string>
+    <string name="btn_stop">停止</string>
 </resources>
