@@ -16,20 +16,22 @@
 - Java: 17
 - compileSdk: 34
 
-## 构建
+## 快速开始
+
+### 1. 下载 JNI 库
 
 ```bash
 cd SherpaOnnxTts
+./download-libs.sh
+```
+
+### 2. 构建 APK
+
+```bash
 ./gradlew assembleDebug
 ```
 
-## 使用
-
-1. 安装 APK
-2. 准备并推送模型文件
-3. 打开应用，输入文字，点击"开始朗读"
-
-## 模型文件
+### 3. 准备模型文件
 
 ```bash
 # 下载模型
@@ -39,8 +41,14 @@ tar xf vits-melo-tts-zh_en.tar.bz2
 # 安装 APK
 adb install app/build/outputs/apk/debug/app-debug.apk
 
-# 推送模型文件
+# 推送模型文件到设备
 adb push vits-melo-tts-zh_en/model.onnx /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
 adb push vits-melo-tts-zh_en/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
 adb push vits-melo-tts-zh_en/tokens.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
 ```
+
+### 4. 使用
+
+1. 打开应用
+2. 在文本框中输入要朗读的文字
+3. 点击"开始朗读"按钮
