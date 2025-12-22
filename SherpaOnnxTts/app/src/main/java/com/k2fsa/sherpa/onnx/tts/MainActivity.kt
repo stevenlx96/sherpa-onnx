@@ -145,44 +145,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initTts() {
-        // 模型路径: /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
-        val modelDir = "vits-melo-tts-zh_en"
+        // 模型路径: /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/matcha-icefall-zh-baker/
+        val modelDir = "matcha-icefall-zh-baker"
         val modelBasePath = File(filesDir, "models/tts")
         val modelPath = File(modelBasePath, modelDir)
 
         Log.i(TAG, "模型路径: ${modelPath.absolutePath}")
 
-        // 检查模型文件
-        val modelFile = File(modelPath, "model.onnx")
+        // 检查模型文件（matcha 模型需要 acoustic_model 和 vocoder）
+        val acousticModelFile = File(modelPath, "model.onnx")
+        val vocoderFile = File(modelPath, "espeak-ng-data")  // matcha 使用 espeak-ng-data 目录
         val lexiconFile = File(modelPath, "lexicon.txt")
         val tokensFile = File(modelPath, "tokens.txt")
 
-        if (!modelFile.exists() || !lexiconFile.exists() || !tokensFile.exists()) {
+        if (!acousticModelFile.exists() || !lexiconFile.exists() || !tokensFile.exists()) {
             val errorMsg = """
                 模型文件未找到！
-                
+
                 请将模型放到: ${modelPath.absolutePath}/
-                
+
                 需要的文件:
                 - model.onnx
                 - lexicon.txt
                 - tokens.txt
-                
+                - espeak-ng-data/ (目录)
+
                 下载地址:
-                https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
+                https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2
             """.trimIndent()
 
             throw Exception(errorMsg)
         }
 
-        // 配置 TTS
+        // 配置 TTS - 使用 Matcha 模型
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
-                vits = OfflineTtsVitsModelConfig(
-                    model = modelFile.absolutePath,
+                matcha = OfflineTtsMatchaModelConfig(
+                    acousticModel = acousticModelFile.absolutePath,
+                    vocoder = "",  // matcha 不需要单独的 vocoder 文件
                     lexicon = lexiconFile.absolutePath,
                     tokens = tokensFile.absolutePath,
-                    dataDir = "",
+                    dataDir = modelPath.absolutePath,  // espeak-ng-data 所在目录
                 ),
                 numThreads = 2,
                 debug = true,
