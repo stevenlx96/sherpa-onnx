@@ -60,7 +60,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="使用说明:\n1. 确保模型文件已放置在正确位置\n2. 输入要朗读的文字\n3. 点击"开始朗读"按钮\n4. 点击"停止"可以停止朗读"
+        android:text="使用说明:\n1. 确保模型文件已放置在正确位置\n2. 输入要朗读的文字\n3. 点击【开始朗读】按钮\n4. 点击【停止】可以停止朗读"
         android:textSize="12sp"
         android:layout_marginTop="16dp"
         android:padding="8dp"
