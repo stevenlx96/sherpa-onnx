@@ -1,69 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:padding="16dp">
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="SherpaOnnx TTS Demo"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="使用 AAR 的 TTS 示例应用"
-        android:textSize="14sp"
-        android:gravity="center"
-        android:layout_marginBottom="24dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="输入要朗读的文字:"
-        android:textSize="16sp"
-        android:layout_marginBottom="8dp" />
 
     <EditText
         android:id="@+id/text_input"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:minHeight="120dp"
-        android:gravity="top"
-        android:hint="请输入文字..."
+        android:hint="请输入要朗读的文字"
+        android:minHeight="100dp"
+        android:gravity="top|start"
         android:inputType="textMultiLine"
-        android:background="@android:drawable/edit_text"
-        android:padding="12dp"
-        android:layout_marginBottom="16dp" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/slider_group"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_input">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="语速 (Speed):" />
+        <SeekBar android:id="@+id/seek_speed" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="200" android:progress="100" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="情感起伏 (Noise Scale):" />
+        <SeekBar android:id="@+id/seek_noise" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="200" android:progress="80" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="音长缩放 (Length Scale):" />
+        <SeekBar android:id="@+id/seek_length" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="200" android:progress="105" />
+    </LinearLayout>
 
     <Button
         android:id="@+id/btn_speak"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="开始朗读"
-        android:textSize="16sp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginTop="24dp"
+        android:text="开始合成"
+        app:layout_constraintEnd_toStartOf="@+id/btn_stop"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/slider_group" />
 
     <Button
         android:id="@+id/btn_stop"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:enabled="false"
         android:text="停止"
-        android:textSize="16sp"
-        android:layout_marginBottom="16dp" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@+id/btn_speak"
+        app:layout_constraintTop_toTopOf="@+id/btn_speak" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="使用说明:\n1. 确保模型文件已放置在正确位置\n2. 输入要朗读的文字\n3. 点击【开始朗读】按钮\n4. 点击【停止】可以停止朗读"
-        android:textSize="12sp"
-        android:layout_marginTop="16dp"
-        android:padding="8dp"
-        android:background="#F0F0F0" />
-
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
