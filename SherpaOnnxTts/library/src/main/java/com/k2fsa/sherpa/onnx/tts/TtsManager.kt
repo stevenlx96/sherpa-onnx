@@ -74,27 +74,38 @@ class TtsManager(private val context: Context) {
     }
 
     private fun initMatchaModel(modelPath: File) {
-        val acousticModelFile = File(modelPath, "model-steps-3.onnx")
+        val acousticModelFile = File(modelPath, "model.onnx")
+        val vocoderFile = File(modelPath, "vocos-22khz-univ.onnx")
         val lexiconFile = File(modelPath, "lexicon.txt")
         val tokensFile = File(modelPath, "tokens.txt")
 
-        checkModelFiles(acousticModelFile, lexiconFile, tokensFile)
+        checkModelFiles(acousticModelFile, vocoderFile, lexiconFile, tokensFile)
+
+        // 规则文件（可选）
+        val ruleFsts = listOf(
+            File(modelPath, "phone.fst"),
+            File(modelPath, "date.fst"),
+            File(modelPath, "number.fst")
+        ).filter { it.exists() }.joinToString(",") { it.absolutePath }
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 matcha = OfflineTtsMatchaModelConfig(
                     acousticModel = acousticModelFile.absolutePath,
-                    vocoder = "",
+                    vocoder = vocoderFile.absolutePath,
                     lexicon = lexiconFile.absolutePath,
                     tokens = tokensFile.absolutePath,
-                    dataDir = "",
+                    dataDir = modelPath.absolutePath,
+                    noiseScale = 0.8f,
+                    lengthScale = 1.05f
                 ),
-                numThreads = 2,
+                numThreads = 4,
                 debug = true,
                 provider = "cpu",
             ),
-            ruleFsts = "",
+            ruleFsts = ruleFsts,
             ruleFars = "",
+            silenceScale = 0.6f
         )
 
         tts = OfflineTts(assetManager = null, config = config)
