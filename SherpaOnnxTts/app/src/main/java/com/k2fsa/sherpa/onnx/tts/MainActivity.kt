@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.k2fsa.sherpa.onnx.*
@@ -20,32 +21,41 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textInput: EditText
     private lateinit var speakButton: Button
     private lateinit var stopButton: Button
+
+    // 滑动条
+    private lateinit var seekSpeed: SeekBar
+    private lateinit var seekNoise: SeekBar
+    private lateinit var seekLength: SeekBar
+
     private var isSpeaking: Boolean = false
     private lateinit var track: AudioTrack
+    private var modelPathString: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 1. 初始化 UI 控件
         textInput = findViewById(R.id.text_input)
         speakButton = findViewById(R.id.btn_speak)
         stopButton = findViewById(R.id.btn_stop)
+        seekSpeed = findViewById(R.id.seek_speed)
+        seekNoise = findViewById(R.id.seek_noise)
+        seekLength = findViewById(R.id.seek_length)
 
-        // 设置默认文本
-        textInput.setText("你好，这是一个简单的中文语音合成示例。")
+        textInput.setText("你好，这是一个可以调节参数的语音合成示例。")
+
+        // 2. 核心：必须先确定路径，后面重新初始化才不会报错
+        val modelDir = "matcha-icefall-zh-baker"
+        modelPathString = File(filesDir, "models/tts/$modelDir").absolutePath
 
         speakButton.setOnClickListener { onClickSpeak() }
         stopButton.setOnClickListener { onClickStop() }
 
-        // 初始化 TTS
+        // 3. 初次加载
         try {
-            Log.i(TAG, "开始初始化 TTS")
-            initTts()
-            Log.i(TAG, "TTS 初始化完成")
-
-            Log.i(TAG, "开始初始化 AudioTrack")
+            updateConfigAndRestartTts() // 直接用这个函数完成初次初始化
             initAudioTrack()
-            Log.i(TAG, "AudioTrack 初始化完成")
         } catch (e: Exception) {
             Log.e(TAG, "初始化失败", e)
             Toast.makeText(this, "初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
@@ -71,67 +81,89 @@ class MainActivity : AppCompatActivity() {
             .setSampleRate(sampleRate)
             .build()
 
-        track = AudioTrack(
-            attr, format, bufLength, AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-        )
-
-        // 设置音量为最大（解决声音小的问题）
+        track = AudioTrack(attr, format, bufLength, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
         track.setVolume(AudioTrack.getMaxVolume())
-        track.play()
     }
 
-    // C++ 回调函数
+    // 更新配置并重启 TTS（因为 Matcha 的部分参数是在初始化时决定的）
+    private fun updateConfigAndRestartTts() {
+        val noise = seekNoise.progress / 100f   // 默认 80 -> 0.8f
+        val length = seekLength.progress / 100f // 默认 105 -> 1.05f
+
+        val ruleFsts = listOf(
+            "$modelPathString/phone.fst",
+            "$modelPathString/date.fst",
+            "$modelPathString/number.fst"
+        ).joinToString(",")
+
+        // 如果旧的已经存在，先释放内存
+        if (::tts.isInitialized) {
+            tts.release()
+        }
+
+        val config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                matcha = OfflineTtsMatchaModelConfig(
+                    acousticModel = "$modelPathString/model.onnx",
+                    vocoder = "$modelPathString/vocos-22khz-univ.onnx",
+                    lexicon = "$modelPathString/lexicon.txt",
+                    tokens = "$modelPathString/tokens.txt",
+                    dataDir = modelPathString,
+                    noiseScale = noise,
+                    lengthScale = length
+                ),
+                numThreads = 4, // 增加到 4 线程，更快更真实
+                debug = true,
+                provider = "cpu"
+            ),
+            ruleFsts = ruleFsts,
+            silenceScale = 0.6f
+        )
+        tts = OfflineTts(assetManager = null, config = config)
+    }
+
     private fun callback(samples: FloatArray): Int {
         if (isSpeaking) {
             track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
             return 1
-        } else {
-            track.stop()
-            return 0
         }
+        return 0
     }
 
     private fun onClickSpeak() {
         val textStr = textInput.text.toString().trim()
-        if (textStr.isBlank()) {
-            Toast.makeText(this, "请输入要朗读的文字！", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (textStr.isBlank()) return
+
+        // 说话前，根据当前滑动条重新加载配置
+        updateConfigAndRestartTts()
+
+        val currentSpeed = seekSpeed.progress / 100f // 语速是在生成时动态传入的
+
+        isSpeaking = true
+        speakButton.isEnabled = false
+        stopButton.isEnabled = true
 
         track.pause()
         track.flush()
         track.play()
 
-        speakButton.isEnabled = false
-        stopButton.isEnabled = true
-        isSpeaking = true
-
         Thread {
             try {
+                // 修正后的生成调用
                 tts.generateWithCallback(
                     text = textStr,
                     sid = 0,
-                    speed = 0.8f,  // 降低速度（0.8倍速），让短语更清晰
+                    speed = currentSpeed,
                     callback = this::callback
                 )
 
                 runOnUiThread {
-                    speakButton.isEnabled = true
-                    stopButton.isEnabled = false
-                    isSpeaking = false
-                    track.stop()
+                    onClickStop()
                     Toast.makeText(this, "朗读完成", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "朗读出错", e)
-                runOnUiThread {
-                    speakButton.isEnabled = true
-                    stopButton.isEnabled = false
-                    isSpeaking = false
-                    track.stop()
-                    Toast.makeText(this, "朗读出错: ${e.message}", Toast.LENGTH_LONG).show()
-                }
+                runOnUiThread { onClickStop() }
             }
         }.start()
     }
@@ -144,69 +176,9 @@ class MainActivity : AppCompatActivity() {
         track.flush()
     }
 
-    private fun initTts() {
-        // 模型路径: /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/matcha-icefall-zh-baker/
-        val modelDir = "matcha-icefall-zh-baker"
-        val modelBasePath = File(filesDir, "models/tts")
-        val modelPath = File(modelBasePath, modelDir)
-
-        Log.i(TAG, "模型路径: ${modelPath.absolutePath}")
-
-        // 检查模型文件
-        val acousticModelFile = File(modelPath, "model-steps-3.onnx")  // matcha 模型文件名
-        val lexiconFile = File(modelPath, "lexicon.txt")
-        val tokensFile = File(modelPath, "tokens.txt")
-
-        if (!acousticModelFile.exists() || !lexiconFile.exists() || !tokensFile.exists()) {
-            val errorMsg = """
-                模型文件未找到！
-
-                请将模型放到: ${modelPath.absolutePath}/
-
-                需要的文件:
-                - model-steps-3.onnx
-                - lexicon.txt
-                - tokens.txt
-                - dict/ (目录)
-
-                下载地址:
-                https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2
-            """.trimIndent()
-
-            throw Exception(errorMsg)
-        }
-
-        // 配置 TTS - 使用 Matcha 模型
-        val config = OfflineTtsConfig(
-            model = OfflineTtsModelConfig(
-                matcha = OfflineTtsMatchaModelConfig(
-                    acousticModel = acousticModelFile.absolutePath,
-                    vocoder = "",
-                    lexicon = lexiconFile.absolutePath,
-                    tokens = tokensFile.absolutePath,
-                    dataDir = "",
-                ),
-                numThreads = 2,
-                debug = true,
-                provider = "cpu",
-            ),
-            ruleFsts = "",
-            ruleFars = "",
-        )
-
-        tts = OfflineTts(assetManager = null, config = config)
-
-        val numSpeakers = tts.numSpeakers()
-        Log.i(TAG, "TTS 说话人数量: $numSpeakers")
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        if (::track.isInitialized) {
-            track.release()
-        }
-        if (::tts.isInitialized) {
-            tts.release()
-        }
+        if (::track.isInitialized) track.release()
+        if (::tts.isInitialized) tts.release()
     }
 }
