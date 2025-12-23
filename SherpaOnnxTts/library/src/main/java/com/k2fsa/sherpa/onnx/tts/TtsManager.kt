@@ -141,13 +141,13 @@ class TtsManager(private val context: Context) {
      * @param text 要朗读的文本
      * @param speed 语速（0.5-2.0，默认 0.8）
      * @param sid 说话人ID（默认 0）
-     * @param callback 音频生成回调（可选）
+     * @param callback 音频生成回调（可选），返回 0 继续，返回 1 停止
      */
     fun speak(
         text: String,
         speed: Float = 0.8f,
         sid: Int = 0,
-        callback: ((FloatArray) -> Unit)? = null
+        callback: ((FloatArray) -> Int)? = null
     ) {
         if (tts == null) {
             throw IllegalStateException("TTS 未初始化，请先调用 initialize()")
@@ -191,7 +191,7 @@ class TtsManager(private val context: Context) {
     fun release() {
         stop()
         audioTrack?.release()
-        tts?.delete()
+        tts?.free()
         audioTrack = null
         tts = null
         Log.i(TAG, "TTS 资源已释放")
