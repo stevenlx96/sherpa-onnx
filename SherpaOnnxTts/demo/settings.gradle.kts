@@ -14,7 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SherpaOnnxTts"
+rootProject.name = "SherpaTtsDemo"
 include(":app")
-include(":library")
-include(":demo:app")
