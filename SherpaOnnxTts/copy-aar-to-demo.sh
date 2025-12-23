@@ -6,7 +6,7 @@ echo "复制 AAR 到 Demo 项目"
 echo "=================================="
 
 AAR_SOURCE="library/build/outputs/aar/library-release.aar"
-AAR_TARGET="demo/libs/library-release.aar"
+AAR_TARGET="demo/app/libs/library-release.aar"
 
 # 检查 AAR 是否存在
 if [ ! -f "$AAR_SOURCE" ]; then
@@ -19,7 +19,7 @@ if [ ! -f "$AAR_SOURCE" ]; then
 fi
 
 # 创建目标目录
-mkdir -p demo/libs
+mkdir -p demo/app/libs
 
 # 复制 AAR
 echo "复制 AAR 文件..."
