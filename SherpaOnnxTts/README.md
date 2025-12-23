@@ -1,54 +1,63 @@
-# Sherpa ONNX TTS
+# SherpaOnnxTts - 中文 TTS Android 应用
 
-简单的中文 TTS (文字转语音) Android 应用。
+基于 sherpa-onnx 的 Android 文本转语音（TTS）应用，支持中文语音合成。
 
-## 功能
+## 项目结构
 
-- 输入文字，点击按钮朗读
-- 支持中文语音合成
-- 模型文件存储在 `/data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/`
-
-## 环境
-
-- AGP: 8.4.0
-- Kotlin: 1.9.23
-- Gradle: 8.13
-- Java: 17
-- compileSdk: 34
+```
+SherpaOnnxTts/
+├── app/                    # Android 应用模块（可运行的 Demo）
+├── library/                # TTS 库模块（可打包成 AAR）
+├── download-libs.sh        # 下载 JNI 库脚本
+├── build-library-aar.sh    # 构建 AAR 包脚本
+├── AAR_USAGE.md           # AAR 使用文档
+└── README.md              # 本文件
+```
 
 ## 快速开始
 
-### 1. 下载 JNI 库
+### 1. 下载依赖库
 
 ```bash
 cd SherpaOnnxTts
 ./download-libs.sh
 ```
 
-### 2. 构建 APK
+### 2. 准备模型文件
 
 ```bash
-./gradlew assembleDebug
+# 下载 Matcha 模型（推荐）
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/matcha-icefall-zh-baker.tar.bz2
+tar -xjf matcha-icefall-zh-baker.tar.bz2
 ```
 
-### 3. 准备模型文件
+### 3. 运行 Demo 应用
 
 ```bash
-# 下载模型
-wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
-tar xf vits-melo-tts-zh_en.tar.bz2
+# 构建
+gradle :app:assembleDebug
 
-# 安装 APK
-adb install app/build/outputs/apk/debug/app-debug.apk
+# 安装
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 
-# 推送模型文件到设备
-adb push vits-melo-tts-zh_en/model.onnx /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
-adb push vits-melo-tts-zh_en/lexicon.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
-adb push vits-melo-tts-zh_en/tokens.txt /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/vits-melo-tts-zh_en/
+# 推送模型
+adb shell mkdir -p /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts
+adb push matcha-icefall-zh-baker /data/data/com.k2fsa.sherpa.onnx.tts/files/models/tts/
 ```
 
-### 4. 使用
+### 4. 打包 AAR 库
 
-1. 打开应用
-2. 在文本框中输入要朗读的文字
-3. 点击"开始朗读"按钮
+```bash
+./build-library-aar.sh
+```
+
+详细使用方法请查看 [AAR_USAGE.md](AAR_USAGE.md)
+
+## 环境要求
+
+- Android SDK: 34
+- Min SDK: 21
+- Gradle: 8.13+
+- Java: 17
+- Kotlin: 1.9.23
+- AGP: 8.4.0

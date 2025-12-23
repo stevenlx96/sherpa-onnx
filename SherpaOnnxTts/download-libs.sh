@@ -32,15 +32,20 @@ unzip -q "${AAR_FILE}"
 
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JNI_LIBS_DIR="${SCRIPT_DIR}/app/src/main/jniLibs"
+APP_JNI_LIBS_DIR="${SCRIPT_DIR}/app/src/main/jniLibs"
+LIBRARY_JNI_LIBS_DIR="${SCRIPT_DIR}/library/src/main/jniLibs"
 
-# 复制.so文件到项目
+# 复制.so文件到app和library模块
 echo "复制库文件到项目..."
 for arch in arm64-v8a armeabi-v7a; do
     if [ -d "jni/${arch}" ]; then
-        echo "  复制 ${arch}..."
-        mkdir -p "${JNI_LIBS_DIR}/${arch}"
-        cp jni/${arch}/*.so "${JNI_LIBS_DIR}/${arch}/"
+        echo "  复制 ${arch} 到 app..."
+        mkdir -p "${APP_JNI_LIBS_DIR}/${arch}"
+        cp jni/${arch}/*.so "${APP_JNI_LIBS_DIR}/${arch}/"
+
+        echo "  复制 ${arch} 到 library..."
+        mkdir -p "${LIBRARY_JNI_LIBS_DIR}/${arch}"
+        cp jni/${arch}/*.so "${LIBRARY_JNI_LIBS_DIR}/${arch}/"
     fi
 done
 
@@ -51,4 +56,8 @@ rm -rf "$TEMP_DIR"
 echo "✅ 库文件下载完成！"
 echo ""
 echo "已安装的库文件:"
-find "${JNI_LIBS_DIR}" -name "*.so" -exec ls -lh {} \;
+echo "App 模块:"
+find "${APP_JNI_LIBS_DIR}" -name "*.so" -exec ls -lh {} \;
+echo ""
+echo "Library 模块:"
+find "${LIBRARY_JNI_LIBS_DIR}" -name "*.so" -exec ls -lh {} \;

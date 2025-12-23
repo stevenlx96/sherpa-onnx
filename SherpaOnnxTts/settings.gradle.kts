@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SherpaOnnxTts"
 include(":app")
+include(":library")
