@@ -23,7 +23,10 @@ data class ModelFiles(
 
     // HomophoneReplacer 文件（可选）
     val lexicon: String? = null,
-    val replaceFst: String? = null
+    val replaceFst: String? = null,
+
+    // 热词文件（可选）
+    val hotwordsFile: String? = null
 )
 
 /**
@@ -106,11 +109,15 @@ class ModelManager(private val context: Context) {
      * 创建在线识别器（使用预定义的模型类型）
      * @param modelType 模型类型
      * @param numThreads 线程数 (默认为CPU核心数)
+     * @param hotwordsFile 热词文件名 (可选，如 "hotwords.txt")
+     * @param hotwordsScore 热词权重分数 (默认 1.5，值越大热词效果越强)
      * @return OnlineRecognizer 或 null (如果模型不存在)
      */
     fun createOnlineRecognizer(
         modelType: ModelType = ModelType.ZIPFORMER_TRANSDUCER,
-        numThreads: Int = Runtime.getRuntime().availableProcessors()
+        numThreads: Int = Runtime.getRuntime().availableProcessors(),
+        hotwordsFile: String? = null,
+        hotwordsScore: Float = 1.5F
     ): OnlineRecognizer? {
 
         if (!checkModelExists(modelType)) {
@@ -122,7 +129,7 @@ class ModelManager(private val context: Context) {
         Log.i(TAG, "Loading model from: ${modelDir.absolutePath}")
         Log.i(TAG, "Using $numThreads threads")
 
-        val config = createRecognizerConfig(modelType, numThreads)
+        val config = createRecognizerConfig(modelType, numThreads, hotwordsFile, hotwordsScore)
 
         return try {
             // assetManager设为null，从文件系统加载
@@ -142,18 +149,20 @@ class ModelManager(private val context: Context) {
      * 创建在线识别器（使用自定义模型文件名）
      * @param modelFiles 自定义的模型文件配置
      * @param numThreads 线程数 (默认为CPU核心数)
+     * @param hotwordsScore 热词权重分数 (默认 1.5，值越大热词效果越强)
      * @return OnlineRecognizer 或 null (如果模型不存在)
      */
     fun createOnlineRecognizer(
         modelFiles: ModelFiles,
-        numThreads: Int = Runtime.getRuntime().availableProcessors()
+        numThreads: Int = Runtime.getRuntime().availableProcessors(),
+        hotwordsScore: Float = 1.5F
     ): OnlineRecognizer? {
 
         Log.i(TAG, "Loading custom model from: ${modelDir.absolutePath}")
         Log.i(TAG, "Using $numThreads threads")
 
         val config = try {
-            createRecognizerConfig(modelFiles, numThreads)
+            createRecognizerConfig(modelFiles, numThreads, hotwordsScore)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create recognizer config: ${e.message}")
             return null
@@ -230,7 +239,9 @@ class ModelManager(private val context: Context) {
      */
     private fun createRecognizerConfig(
         modelType: ModelType,
-        numThreads: Int
+        numThreads: Int,
+        hotwordsFile: String? = null,
+        hotwordsScore: Float = 1.5F
     ): OnlineRecognizerConfig {
         val modelConfig = when (modelType) {
             ModelType.ZIPFORMER_TRANSDUCER -> {
@@ -292,6 +303,20 @@ class ModelManager(private val context: Context) {
         // 配置同音字替换器（如果文件存在）
         val hrConfig = createHomophoneReplacerConfig()
 
+        // 配置热词文件路径
+        val hotwordsFilePath = if (hotwordsFile != null) {
+            val hotwordsFileObj = File(asrDir, hotwordsFile)
+            if (hotwordsFileObj.exists()) {
+                Log.i(TAG, "Hotwords enabled: file=${hotwordsFileObj.absolutePath}, score=$hotwordsScore")
+                hotwordsFileObj.absolutePath
+            } else {
+                Log.w(TAG, "Hotwords file not found: ${hotwordsFileObj.absolutePath}")
+                ""
+            }
+        } else {
+            ""
+        }
+
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
@@ -301,7 +326,9 @@ class ModelManager(private val context: Context) {
             hr = hrConfig,
             enableEndpoint = true,
             decodingMethod = "greedy_search",
-            maxActivePaths = 4
+            maxActivePaths = 4,
+            hotwordsFile = hotwordsFilePath,
+            hotwordsScore = hotwordsScore
         )
     }
 
@@ -310,7 +337,8 @@ class ModelManager(private val context: Context) {
      */
     private fun createRecognizerConfig(
         modelFiles: ModelFiles,
-        numThreads: Int
+        numThreads: Int,
+        hotwordsScore: Float = 1.5F
     ): OnlineRecognizerConfig {
         // 确定模型类型并构建配置
         val modelConfig = when {
@@ -387,6 +415,20 @@ class ModelManager(private val context: Context) {
         // 配置同音字替换器
         val hrConfig = createHomophoneReplacerConfig(modelFiles)
 
+        // 配置热词文件路径
+        val hotwordsFilePath = if (modelFiles.hotwordsFile != null) {
+            val hotwordsFileObj = File(asrDir, modelFiles.hotwordsFile)
+            if (hotwordsFileObj.exists()) {
+                Log.i(TAG, "Hotwords enabled (custom): file=${hotwordsFileObj.absolutePath}, score=$hotwordsScore")
+                hotwordsFileObj.absolutePath
+            } else {
+                Log.w(TAG, "Custom hotwords file not found: ${hotwordsFileObj.absolutePath}")
+                ""
+            }
+        } else {
+            ""
+        }
+
         return OnlineRecognizerConfig(
             featConfig = FeatureConfig(
                 sampleRate = 16000,
@@ -396,7 +438,9 @@ class ModelManager(private val context: Context) {
             hr = hrConfig,
             enableEndpoint = true,
             decodingMethod = "greedy_search",
-            maxActivePaths = 4
+            maxActivePaths = 4,
+            hotwordsFile = hotwordsFilePath,
+            hotwordsScore = hotwordsScore
         )
     }
 
