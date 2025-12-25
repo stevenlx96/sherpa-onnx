@@ -4,11 +4,6 @@
 
 本 AAR 包（`tts.aar`）提供离线 TTS（文本转语音）功能，基于 sherpa-onnx 引擎，支持 Matcha-TTS 模型。
 
-**核心特性**：
-- 离线运行，无需联网
-- 高质量中文语音合成
-- 可调参数：语速、情感起伏、音长缩放
-- 流式音频播放
 
 ---
 
@@ -26,33 +21,6 @@
 - **minSdk**: 21 (Android 5.0)
 - **targetSdk**: 34 (Android 14)
 - **compileSdk**: 34
-
----
-
-## 📥 AAR 构建流程
-
-### 步骤 1: 下载 JNI 库
-
-```bash
-cd SherpaOnnxTts
-./download-libs.sh
-```
-
-此脚本会下载并提取 `libsherpa-onnx-jni.so` 文件到 `library/src/main/jniLibs/` 目录。
-
-### 步骤 2: 构建 AAR 包
-
-```bash
-./build-library-aar.sh
-```
-
-构建成功后，AAR 文件位置：`library/build/outputs/aar/library-release.aar`
-
-### 步骤 3: 重命名 AAR（建议）
-
-```bash
-cp library/build/outputs/aar/library-release.aar tts.aar
-```
 
 ---
 
@@ -125,9 +93,6 @@ cp -r /data/local/tmp/matcha-icefall-zh-baker/* /data/data/YOUR_PACKAGE/files/mo
 chmod -R 755 /data/data/YOUR_PACKAGE/files/models/tts/
 exit
 ```
-
-**重要**：模型文件直接放在 `models/tts/` 目录下，不需要 `matcha-icefall-zh-baker` 子目录。
-
 **验证**：
 
 ```bash
@@ -269,7 +234,7 @@ ruleFsts = ruleFsts
 **初始化 AudioTrack**：
 
 ```kotlin
-val sampleRate = tts.sampleRate()  // 获取采样率（22050 Hz）
+val sampleRate = tts.sampleRate()  
 
 val track = AudioTrack(
     AudioAttributes.Builder()
@@ -327,73 +292,3 @@ override fun onDestroy() {
 | **silenceScale** | `OfflineTtsConfig(silenceScale = ?)` | 0.0 - 1.0 | 0.6 | ✅ 是 |
 
 ---
-
-## 💡 应用场景示例
-
-### 新闻播报（快速 + 平稳）
-
-```kotlin
-speed = 1.5f
-noiseScale = 0.6f
-lengthScale = 0.9f
-```
-
-### 儿童故事（慢速 + 生动）
-
-```kotlin
-speed = 0.9f
-noiseScale = 1.2f
-lengthScale = 1.1f
-```
-
-### 视障辅助（慢速 + 清晰）
-
-```kotlin
-speed = 0.8f
-noiseScale = 0.7f
-lengthScale = 1.05f
-```
-
-### 学习发音（极慢 + 拉长）
-
-```kotlin
-speed = 0.7f
-noiseScale = 0.8f
-lengthScale = 1.2f
-```
-
----
-
-## 📝 注意事项
-
-1. **AAR 文件名**：建议重命名为 `tts.aar`
-2. **模型文件路径**：`/data/data/YOUR_PACKAGE/files/models/tts/`（直接在 tts 目录下）
-3. **必需文件**：`model.onnx`、`vocos-22khz-univ.onnx`、`lexicon.txt`、`tokens.txt`、`dict/`
-4. **可选文件**：`phone.fst`、`date.fst`、`number.fst`
-5. **线程要求**：TTS 生成必须在子线程执行
-6. **参数更新**：修改 `noiseScale` 或 `lengthScale` 需要重新创建 `OfflineTts` 对象
-7. **资源释放**：使用完毕后必须调用 `tts.release()` 和 `track.release()`
-
----
-
-## 🔍 故障排查
-
-### 模型文件不存在
-
-**错误**：`--matcha-acoustic-model: '.../model.onnx' does not exist`
-
-**解决**：检查模型文件是否正确推送到 `/data/data/YOUR_PACKAGE/files/models/tts/` 目录
-
-### 缺少 vocoder
-
-**错误**：`Vocoder is not specified. Return an empty wave`
-
-**解决**：确保配置中设置了 `vocoder = "$modelPath/vocos-22khz-univ.onnx"`
-
-### JNI 库缺失
-
-**错误**：`java.lang.UnsatisfiedLinkError: dlopen failed: library "libsherpa-onnx-jni.so" not found`
-
-**解决**：
-1. 检查 AAR 是否包含 .so 文件：`unzip -l tts.aar | grep libsherpa-onnx-jni.so`
-2. 如果缺失，重新运行 `./download-libs.sh` 和 `./build-library-aar.sh`
