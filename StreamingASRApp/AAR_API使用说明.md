@@ -1255,98 +1255,94 @@ chmod -R 755 /data/data/你的包名/files/models/
 
 ---
 
-## HomophoneReplacer 使用说明
+## 7️⃣ HomophoneReplacer - 热词/同音字纠正
 
-### 概述
+**来自**: sherpa-onnx 库（com.k2fsa.sherpa.onnx）
 
-HomophoneReplacer（热词/同音字替换）是 Sherpa-ONNX 的同音字自动纠正功能，可以自动修正识别结果中的常见同音字错误。
+### 功能说明
 
-**示例**:
+HomophoneReplacer 是 Sherpa-ONNX 的同音字自动纠正功能。当 ASR 模型目录存在 `lexicon.txt` 和 `replace.fst` 文件时，会自动启用该功能，无需修改代码。
+
+**纠正示例**:
 - "在坐" → "在座"
 - "因该" → "应该"
-- "做作业" → "做作业"（不改，因为正确）
+- "做作业" → "做作业"（保持不变）
 
----
+### 文件要求
 
-### 📁 文件要求
+| 文件 | 说明 | 路径 |
+|------|------|------|
+| `lexicon.txt` | 词典文件（拼音映射） | `/data/data/你的包名/files/models/asr/` |
+| `replace.fst` | 替换规则（OpenFST 格式） | `/data/data/你的包名/files/models/asr/` |
 
-需要两个文件：
+**注意**: 两个文件必须同时存在才会启用功能。
 
-| 文件 | 说明 |
-|------|------|
-| `lexicon.txt` | 词典文件（拼音映射） |
-| `replace.fst` | 替换规则（OpenFST 格式） |
+### 使用方法
 
-**存放位置**: `/data/data/你的包名/files/models/asr/`
+#### 下载文件
 
----
-
-### ✅ 使用方法（超简单！）
-
-#### 步骤1: 下载文件
-
-从 sherpa-onnx 官方下载：
+从 sherpa-onnx 官方获取：
 ```
 https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
 ```
 
-下载这两个文件：
+下载文件：
 - `lexicon.txt`
 - `replace.fst`
 
-#### 步骤2: 部署文件
+#### 部署文件
 
+使用 adb 推送到设备：
 ```bash
-# 推送到设备
 adb push lexicon.txt /data/data/你的包名/files/models/asr/
 adb push replace.fst /data/data/你的包名/files/models/asr/
 ```
 
-#### 步骤3: 使用（不需要改代码！）
+#### 启用功能
 
+无需修改代码，正常创建识别器即可：
 ```kotlin
 val recognizer = modelManager.createOnlineRecognizer(
     modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
 )
-
-// 就这样！如果 lexicon.txt 和 replace.fst 存在，自动启用！
 ```
 
-**日志确认**:
+ModelManager 会自动检测文件并启用 HomophoneReplacer。
+
+#### 验证启用
+
+查看 Logcat 日志：
 ```
 I/ModelManager: HomophoneReplacer enabled: lexicon=/data/data/.../lexicon.txt, fst=/data/data/.../replace.fst
 ```
 
----
+如果未启用，日志会显示：
+```
+D/ModelManager: HomophoneReplacer disabled: lexicon.txt not found
+D/ModelManager: HomophoneReplacer disabled: replace.fst not found
+```
 
-### 🔍 工作原理
+### 工作原理
 
-ModelManager 会自动检测这两个文件：
+ModelManager 在创建识别器时会自动检测这两个文件：
 
 ```kotlin
-// ModelManager 内部代码（你不需要写）
 private fun createHomophoneReplacerConfig(): HomophoneReplacerConfig {
     val lexiconFile = File(asrDir, "lexicon.txt")
     val replaceFstFile = File(asrDir, "replace.fst")
 
     return if (lexiconFile.exists() && replaceFstFile.exists()) {
-        // ✅ 两个文件都存在 → 自动启用
         HomophoneReplacerConfig(
             lexicon = lexiconFile.absolutePath,
             ruleFsts = replaceFstFile.absolutePath
         )
     } else {
-        // ❌ 文件不存在 → 不启用
         HomophoneReplacerConfig()
     }
 }
 ```
 
-**重点**: 你不需要调用任何额外代码，ModelManager 会自动处理！
-
----
-
-### 📂 完整目录结构
+### 完整目录结构
 
 ```
 /data/data/你的包名/files/models/
@@ -1363,13 +1359,11 @@ private fun createHomophoneReplacerConfig(): HomophoneReplacerConfig {
     └── silero_vad.onnx
 ```
 
----
-
-### 📝 文件格式说明
+### 文件格式
 
 #### lexicon.txt 格式
 
-词典文件，拼音映射：
+词典文件，记录词语和拼音映射：
 
 ```
 在坐 z ai4 z uo4
@@ -1392,13 +1386,11 @@ private fun createHomophoneReplacerConfig(): HomophoneReplacerConfig {
 
 **格式**: `起始状态 目标状态 输入词 输出词`
 
-**注意**: 这是二进制格式，需要用 OpenFST 工具编译生成，或直接下载官方提供的文件。
+**注意**: 这是二进制格式，需要用 OpenFST 工具编译生成，建议直接使用官方提供的文件。
 
----
+### 自定义替换规则
 
-### ⚙️ 自定义替换规则
-
-#### 方法1: 修改文本文件（推荐）
+#### 方法1: 修改现有文件
 
 1. 编辑 `lexicon.txt`，添加新词:
    ```
@@ -1406,9 +1398,9 @@ private fun createHomophoneReplacerConfig(): HomophoneReplacerConfig {
    做站 z uo4 z han4
    ```
 
-2. 重新编译 `replace.fst`（需要 OpenFST 工具）
+2. 使用 OpenFST 工具重新编译 `replace.fst`
 
-3. 替换文件，重启应用
+3. 替换设备上的文件，重新创建识别器
 
 #### 方法2: 使用官方工具
 
@@ -1422,53 +1414,34 @@ sudo apt-get install libfst-dev
 # 详见: https://k2-fsa.github.io/sherpa/onnx/hotwords/
 ```
 
----
-
-### 🧪 测试效果
-
-#### 测试代码
+### 测试验证
 
 ```kotlin
 val recognizer = modelManager.createOnlineRecognizer()
 val stream = recognizer?.createStream()
 
-// 说："我在坐在这里"
-// 期望输出："我在座在这里"（"在坐" 被纠正为 "在座"）
+// 测试: 说 "我在坐在这里"
+// 期望输出: "我在座在这里"（"在坐" 被纠正为 "在座"）
 ```
 
-#### 检查是否启用
+### 常见问题
 
-查看 Logcat 日志：
+#### Q1: 功能不生效
 
-```
-✅ 已启用:
-I/ModelManager: HomophoneReplacer enabled: lexicon=/data/data/.../lexicon.txt
-
-❌ 未启用:
-D/ModelManager: HomophoneReplacer disabled: lexicon.txt not found
-D/ModelManager: HomophoneReplacer disabled: replace.fst not found
-```
-
----
-
-### ❓ 常见问题
-
-#### Q1: HomophoneReplacer 不生效？
-
-**检查清单**:
-1. ✅ 文件路径正确？
+**排查步骤**:
+1. 检查文件路径是否正确
    ```bash
    adb shell ls /data/data/你的包名/files/models/asr/lexicon.txt
    adb shell ls /data/data/你的包名/files/models/asr/replace.fst
    ```
 
-2. ✅ 两个文件都存在？（缺一个都不行）
+2. 确认两个文件都存在（缺一不可）
 
-3. ✅ 查看日志是否有 "HomophoneReplacer enabled"
+3. 查看日志是否有 "HomophoneReplacer enabled"
 
-#### Q2: 需要重启应用吗？
+#### Q2: 更新文件后需要重启应用吗？
 
-**答**: 需要重新加载识别器
+需要重新加载识别器：
 
 ```kotlin
 // 释放旧识别器
@@ -1478,21 +1451,21 @@ recognizer?.release()
 recognizer = modelManager.createOnlineRecognizer()
 ```
 
-#### Q3: 可以不用 HomophoneReplacer 吗？
+#### Q3: 可以不使用该功能吗？
 
-**答**: 可以！如果不放这两个文件，功能就不会启用，不影响正常使用。
+可以。如果不放置这两个文件，功能不会启用，不影响正常使用。
 
 #### Q4: 文件放错位置会怎样？
 
-**答**: ModelManager 找不到文件，功能不会启用，但不会报错。日志会显示：
+ModelManager 找不到文件时，功能不会启用，但不会报错。日志会显示：
 ```
 D/ModelManager: HomophoneReplacer disabled: lexicon.txt not found
 ```
 
 #### Q5: 可以动态切换替换规则吗？
 
-**答**: 可以，但需要：
-1. 替换文件（lexicon.txt 和 replace.fst）
+可以，步骤如下：
+1. 替换设备上的文件（lexicon.txt 和 replace.fst）
 2. 释放旧识别器
 3. 重新创建识别器
 
@@ -1506,68 +1479,55 @@ recognizer?.release()
 recognizer = modelManager.createOnlineRecognizer()
 ```
 
----
+### 性能影响
 
-### 📊 性能影响
+| 指标 | 影响 |
+|------|------|
+| CPU 占用 | 几乎无影响（< 1%） |
+| 内存占用 | 约 1-5 MB（取决于规则数量） |
+| 识别延迟 | 几乎无影响（后处理，不影响实时性） |
 
-- **CPU 占用**: 几乎无影响（< 1%）
-- **内存占用**: 约 1-5 MB（取决于规则数量）
-- **识别延迟**: 几乎无影响（后处理，不影响实时性）
+### 最佳实践
 
----
+1. **使用官方文件**: 直接使用 sherpa-onnx 官方提供的文件，已包含常见同音字错误
+2. **定期更新**: 根据实际识别错误，定期更新替换规则
+3. **测试验证**: 更新文件后，测试常见句子确保规则生效
+4. **备份原文件**: 修改前备份原文件，避免出错
 
-### 🎯 最佳实践
+### 使用示例
 
-#### 1. 使用官方文件
+```kotlin
+// 初始化
+val modelManager = ModelManager(context)
 
-推荐直接使用 sherpa-onnx 官方提供的文件，已经包含常见的同音字错误。
+// 正常创建识别器（如果文件存在，会自动启用 HomophoneReplacer）
+val recognizer = modelManager.createOnlineRecognizer(
+    modelType = ModelManager.ModelType.ZIPFORMER_TRANSDUCER
+)
 
-#### 2. 定期更新
+val stream = recognizer?.createStream()
 
-根据实际识别错误，定期更新替换规则。
+// 使用识别器
+lifecycleScope.launch(Dispatchers.IO) {
+    while (isRecording) {
+        val samples = audioRecorder?.readAudioData()
 
-#### 3. 测试验证
+        if (samples != null) {
+            stream?.acceptWaveform(samples, 16000)
 
-更新文件后，测试常见句子确保规则生效。
+            while (recognizer?.isReady(stream!!) == true) {
+                recognizer?.decode(stream!!)
+            }
 
-#### 4. 备份原文件
+            val result = recognizer?.getResult(stream!!)
+            val text = result?.text ?: ""
 
-修改前备份原文件，避免出错。
-
----
-
-### 📋 总结
-
-#### 使用 HomophoneReplacer 的完整步骤
-
-1. **下载文件**
-   ```
-   https://github.com/k2-fsa/sherpa-onnx/releases/tag/hr-files
-   ```
-
-2. **部署文件**
-   ```bash
-   adb push lexicon.txt /data/data/你的包名/files/models/asr/
-   adb push replace.fst /data/data/你的包名/files/models/asr/
-   ```
-
-3. **正常使用**
-   ```kotlin
-   val recognizer = modelManager.createOnlineRecognizer()
-   // 自动启用！
-   ```
-
-4. **验证日志**
-   ```
-   I/ModelManager: HomophoneReplacer enabled: lexicon=...
-   ```
-
-#### 关键点
-
-✅ **不需要写额外代码**
-✅ **直接放文件就能用**
-✅ **自动检测并启用**
-✅ **不影响性能**
+            // 识别结果已自动应用同音字纠正
+            Log.i(TAG, "识别结果: $text")
+        }
+    }
+}
+```
 
 ---
 
